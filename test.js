@@ -1,39 +1,39 @@
 const { executeCpp } = require("./executeCpp");
+const { generateFile } = require("./generateFile");
+const { generateInputFile } = require("./generateInputFile");
 const fs = require("fs");
-const path = require("path");
 
-//1. C++ Program That Reads Input
+// 1. C++ Program That Reads Input (Malicious Infinite Output)
 const code = `
 #include <iostream>
 using namespace std;
 
 int main() {
-    int a, b;
-    cin >> a >> b;
-    cout << (a * b);
+    while(true) {
+        cout << "A";
+    }
     return 0;
 }
 `;
 
-//2. Write the source file
-const codesDir = path.join(__dirname, "codes");
-if (!fs.existsSync(codesDir)) {
-    fs.mkdirSync(codesDir, { recursive: true });
-}
-
-const filepath = path.join(codesDir, "test_job.cpp");
-fs.writeFileSync(filepath, code);
-console.log(`Code written to ${filepath}`);
-
-//3. Write the input file 
+// 2. Input Data
 const inputData = "10 20";
-const inputPath = path.join(__dirname, "input.txt");
-fs.writeFileSync(inputPath, inputData);
-console.log(`Input written to ${inputPath}`);
 
-//4. Execute and judge
-executeCpp(filepath, inputPath)
-    .then((output) => {
+const runTest = async () => {
+    let filepath = "";
+    let inputPath = "";
+
+    try {
+        console.log("Generating dynamic files...");
+        filepath = await generateFile("cpp", code);
+        inputPath = await generateInputFile(inputData);
+
+        console.log(`Code written to ${filepath}`);
+        console.log(`Input written to ${inputPath}`);
+
+        console.log("Executing in Docker Sandbox...");
+        const output = await executeCpp(filepath, inputPath);
+
         const result = output.trim();
         const expected = "200";
 
@@ -48,9 +48,21 @@ executeCpp(filepath, inputPath)
         } else {
             console.log(`\nVerdict: WRONG ANSWER (expected "${expected}", got "${result}")`);
         }
-    })
-    .catch((err) => {
+    } catch (err) {
         console.error("\n ERROR");
         console.error(`${err.type}: ${err.message}`);
         console.error(" END");
-    });
+    } finally {
+        console.log("\nCleaning up files...");
+        if (filepath && fs.existsSync(filepath)) {
+            fs.unlinkSync(filepath);
+            console.log(`Deleted ${filepath}`);
+        }
+        if (inputPath && fs.existsSync(inputPath)) {
+            fs.unlinkSync(inputPath);
+            console.log(`Deleted ${inputPath}`);
+        }
+    }
+};
+
+runTest();
