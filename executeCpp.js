@@ -8,46 +8,57 @@ if (!fs.existsSync(outputPath)) {
     fs.mkdirSync(outputPath, { recursive: true });
 }
 
-const executeCpp = (filepath) => {
-    // Logic:
-    // 1. Get the file ID and Name
-    // 2. Compile: g++ code.cpp -o code.out
-    // 3. Run: ./code.out
-
+/**
+ * Compiles and executes a C++ file with optional input redirection.
+ * @param {string} filepath - Absolute path to the .cpp source file.
+ * @param {string} [inputPath] - Absolute path to a .txt file whose contents
+ *                                will be piped into the program's stdin via
+ *                                file redirection (<).
+ * @returns {Promise<string>} The raw stdout produced by the program.
+ */
+const executeCpp = (filepath, inputPath) => {
     const jobId = path.basename(filepath).split(".")[0];
 
-    // Windows compatibility: .exe extension is needed for execution usually.
     const isWindows = process.platform === "win32";
     const executablePath = isWindows
         ? path.join(outputPath, `${jobId}.exe`)
         : path.join(outputPath, `${jobId}.out`);
 
     return new Promise((resolve, reject) => {
-        // Compile command
+        //Compile
         const compileCmd = `g++ "${filepath}" -o "${executablePath}"`;
-
-        // Execute command
-        // Use quotes to handle paths with spaces
-        const executeCmd = `"${executablePath}"`;
 
         console.log(`Compiling: ${compileCmd}`);
 
         exec(compileCmd, (error, stdout, stderr) => {
             if (error) {
                 console.error(`Compilation Error: ${error}`);
-                reject({ type: 'Compilation Error', message: stderr || error.message });
-                return;
+                return reject({ type: "Compilation Error", message: stderr || error.message });
+            }
+
+            //Execute with optional input redirection
+            let executeCmd = `"${executablePath}"`;
+            if (inputPath) {
+                executeCmd += ` < "${inputPath}"`;
             }
 
             console.log(`Compiled successfully. Executing: ${executeCmd}`);
 
-            exec(executeCmd, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Runtime Error: ${error}`);
-                    reject({ type: 'Runtime Error', message: stderr || error.message });
-                    return;
+            exec(executeCmd, { timeout: 5000 }, (runError, runStdout, runStderr) => {
+                if (runError) {
+                    if (runError.killed) {
+                        return reject({
+                            type: "Runtime Error",
+                            message: "TLE (Time Limit Exceeded)",
+                        });
+                    }
+                    return reject({
+                        type: "Runtime Error",
+                        message: runStderr || runError.message,
+                    });
                 }
-                resolve(stdout);
+
+                resolve(runStdout);
             });
         });
     });
