@@ -26,19 +26,19 @@ const executeCpp = (filepath, inputPath) => {
     const codesDir = path.dirname(filepath);
 
     return new Promise((resolve, reject) => {
-        // ----- Build the docker run command -----
-        // Notice we do NOT mount the host outputs folder anymore.
-        // The binary gets compiled strictly inside the transient docker sandbox.
+        //Build the docker run command
+        //Notice we do NOT mount the host outputs folder anymore.
+        //The binary gets compiled strictly inside the transient docker sandbox.
         const volumes = [
             "-v", `${codesDir}:/sandbox/codes:ro`,
         ];
 
-        // Inner shell command: compile then execute
+        //Inner shell command: compile then execute
         let innerCmd =
             `g++ /sandbox/codes/${filename} -o /sandbox/${jobId}.out` +
             ` && /sandbox/${jobId}.out`;
 
-        // If an input file is provided, mount it and redirect into stdin
+        //If an input file is provided, mount it and redirect into stdin
         if (inputPath) {
             const inputFilename = path.basename(inputPath);
             const inputDir = path.dirname(inputPath);
@@ -48,7 +48,7 @@ const executeCpp = (filepath, inputPath) => {
 
         const args = [
             "run", "--rm",
-            "--network=none", // Safer format for spawn
+            "--network=none", //Safer format for spawn
             "--memory=128m",
             "--cpus=0.5",
             ...volumes,
@@ -63,7 +63,7 @@ const executeCpp = (filepath, inputPath) => {
 
         const process = spawn("docker", args);
 
-        // Timer for Time Limit Exceeded (TLE)
+        //Timer for Time Limit Exceeded (TLE)
         const timeoutId = setTimeout(() => {
             killed = true;
             process.kill("SIGKILL");

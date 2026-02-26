@@ -10,7 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "bullmq": "^5.70.1",
     "express": "^5.2.1",
+    "ioredis": "^5.9.3",
     "nodemon": "^3.1.11",
     "uuid": "^13.0.0"
   }
