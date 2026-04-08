@@ -2,7 +2,7 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const DOCKER_IMAGE = "gcc:latest";
+const DOCKER_IMAGE = "spectral-runner";
 const MAX_OUTPUT_SIZE = 1024 * 1024; // 1MB
 
 /**

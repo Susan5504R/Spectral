@@ -6,11 +6,9 @@ const { Submission } = require("./db");
 const app = express();
 app.use(express.json()); // Allows the server to read JSON bodies
 
-// same queue connection worker uses. Use REDIS env vars so docker-compose can wire services.
-const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1";
-const REDIS_PORT = process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379;
+//same queue connection worker uses
 const submissionQueue = new Queue("python-codes", {
-    connection: { host: REDIS_HOST, port: REDIS_PORT },
+    connection: { host: "127.0.0.1", port: 6379 },
 });
 
 //post endpoint where users send their code
@@ -61,7 +59,7 @@ app.get("/status/:id", async (req, res) => {
     res.json(submission);
 });
 
-const PORT = process.env.API_PORT ? parseInt(process.env.API_PORT, 10) : 5000;
+const PORT = 5000;
 app.listen(PORT, () => {
-    console.log(`API Server running on http://0.0.0.0:${PORT}`);
+    console.log(`API Server running on http://localhost:${PORT}`);
 });

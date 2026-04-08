@@ -54,7 +54,7 @@ const worker = new Worker(
         }
     },
     {
-        connection: { host: process.env.REDIS_HOST || "127.0.0.1", port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379 },
+        connection: { host: "127.0.0.1", port: 6379 },
         // This limits the worker to only running 2 jobs at the same time
         // This prevents our CPU from exploding
         concurrency: 2,

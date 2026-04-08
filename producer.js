@@ -5,8 +5,8 @@ const { Submission } = require("./db");
 //Connect to the Redis server we started in Docker
 const submissionQueue = new Queue("python-codes", {
     connection: {
-        host: process.env.REDIS_HOST || "127.0.0.1",
-        port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379,
+        host: "127.0.0.1",
+        port: 6379,
     },
 });
 //This function simulates a user submitting code to an API
