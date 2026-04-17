@@ -1,31 +1,42 @@
+version: '3.8'
+
 services:
   db:
     image: postgres:latest
+    container_name: spectral-db
     environment:
-      POSTGRES_PASSWORD: mysecretpassword
-      POSTGRES_DB: postgres
-      PGDATA: /var/lib/postgresql/data/pgdata 
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:alpine
+    container_name: spectral-redis
     ports:
       - "6379:6379"
 
   api:
     build: .
-    command: npx nodemon server.js
+    container_name: spectral-api
+    command: node server.js # 👈 CHANGED THIS TO NODE
     ports:
-      - "5000:5000"
+      - "${PORT}:${PORT}"
     environment:
-      - DB_HOST=db
-      - REDIS_HOST=redis
+      - DB_HOST=${DB_HOST}
+      - REDIS_HOST=${REDIS_HOST}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
@@ -34,18 +45,24 @@ services:
 
   worker:
     build: .
-    command: npx nodemon worker.js
+    container_name: spectral-worker
+    command: node worker.js # 👈 CHANGED THIS TO NODE
     environment:
-      - DB_HOST=db
-      - REDIS_HOST=redis
+      - DB_HOST=${DB_HOST}
+      - REDIS_HOST=${REDIS_HOST}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
       - HOST_PWD=${PWD}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/usr/src/app      
       - /usr/src/app/node_modules
-      - .:/sandbox          
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
+
+volumes:
+  pgdata:

@@ -1,9 +1,10 @@
 const { Sequelize, DataTypes } = require("sequelize");
 
-const sequelize = new Sequelize("postgres", "postgres", "mysecretpassword", {
-    host: process.env.DB_HOST || "127.0.0.1", // Uses 'db' in Docker
-    dialect: "postgres",
-    logging: false,
+const sequelize = new Sequelize('postgres', 'postgres', 'mysecretpassword', {
+    host: process.env.DB_HOST || '127.0.0.1',
+    dialect: 'postgres',
+    port: process.env.DB_PORT || 5432,
+    logging: false // 👈 ADD THIS LINE TO MUTE SQL LOGS
 });
 const Submission = sequelize.define("Submission", {
     id: { type: DataTypes.UUID, primaryKey: true },

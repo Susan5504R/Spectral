@@ -1,2 +1,14 @@
-FROM gcc:latest
+FROM alpine:3.18
+
+# Install the actual compilers
+RUN apk update && apk add --no-cache \
+    g++ \
+    gcc \
+    python3 \
+    openjdk11
+
+# Set Java path so 'javac' is recognized
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+ENV PATH="$JAVA_HOME/bin:${PATH}"
+
 WORKDIR /sandbox
