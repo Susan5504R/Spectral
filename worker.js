@@ -1,11 +1,9 @@
 const { Worker, Queue } = require("bullmq");
 const fs = require("fs");
 
-// DB
-const { Submission, ExecutionMetrics } = require("./db");
+const { Submission, ExecutionMetrics, TestCase } = require("./db");
 const { storeFingerprint } = require("./anticheat/store");
 
-// Executors
 const { executeCpp } = require("./executors/executeCpp");
 const { executeC } = require("./executors/executeC");
 const { executePython } = require("./executors/executePython");
@@ -25,71 +23,106 @@ function normalize(str) {
     return String(str).trim().replace(/[ \t]+/g, " ").replace(/\r\n/g, "\n");
 }
 
+function classifyError(err, msg) {
+    const lower = msg.toLowerCase();
+    if (lower.includes("tle") || lower.includes("time limit")) return "Time Limit Exceeded";
+    if (
+        lower.includes("error:") || lower.includes("compilation") ||
+        lower.includes("syntaxerror") || lower.includes("javac") ||
+        lower.includes("gcc") || lower.includes("g++")
+    ) return "Compilation Error";
+    return err.type || "Runtime Error";
+}
+
+async function runExecutor(language, filepath, inputPath) {
+    switch (language) {
+        case "cpp":    return executeCpp(filepath, inputPath);
+        case "c":      return executeC(filepath, inputPath);
+        case "python": return executePython(filepath, inputPath);
+        case "java":   return executeJava(filepath, inputPath);
+        default:       throw new Error("Language not supported");
+    }
+}
+
 const worker = new Worker("python-codes", async (job) => {
     const { code, input, language, submissionId, problemId, expectedOutput } = job.data;
 
-    let executionTime = 0;
-    let memoryUsed = 0;
+    let totalTime = 0, peakMemory = 0;
     let status = "Pending";
     let finalOutput = "";
     let errorMsg = null, capturedError = null;
-    let filepath, inputPath;
+    let filepath;
 
-    console.log(`\n[JOB ${job.id}] Processing ${language.toUpperCase()} for problem ${problemId}...`);
+    console.log(`\n[JOB ${job.id}] Processing ${language?.toUpperCase()} for problem ${problemId}...`);
 
     const extensionMap = { cpp: "cpp", c: "c", python: "py", java: "java" };
 
     try {
         const ext = extensionMap[language] || "txt";
         filepath = await generateFile(ext, code);
-        inputPath = input ? await generateInputFile(input) : null;
 
-        let result;
-        switch (language) {
-            case "cpp": result = await executeCpp(filepath, inputPath); break;
-            case "c": result = await executeC(filepath, inputPath); break;
-            case "python": result = await executePython(filepath, inputPath); break;
-            case "java": result = await executeJava(filepath, inputPath); break;
-            default: throw new Error("Language not supported");
-        }
+        const testCases = problemId
+            ? await TestCase.findAll({ where: { problemId } })
+            : [];
 
-        executionTime = result.time;
-        memoryUsed = result.memory;
-        finalOutput = result.output;
+        if (testCases.length > 0) {
+            // Multi-test-case mode: judge against all DB test cases
+            status = "Accepted";
+            for (const tc of testCases) {
+                let inputPath;
+                try {
+                    inputPath = await generateInputFile(tc.input);
+                    const result = await runExecutor(language, filepath, inputPath);
+                    totalTime += result.time;
+                    peakMemory = Math.max(peakMemory, result.memory);
+                    finalOutput = result.output;
 
-        console.log(`[JOB ${job.id}] Time: ${executionTime.toFixed(2)} ms`);
-        console.log(`[JOB ${job.id}] Memory: ${memoryUsed.toFixed(2)} MB`);
-        console.log(`[JOB ${job.id}] OUTPUT:\n${finalOutput.trim()}`);
+                    if (normalize(result.output) !== normalize(tc.expectedOutput)) {
+                        status = "Wrong Answer";
+                        break;
+                    }
+                } catch (err) {
+                    errorMsg = err.message || "Unknown error";
+                    status = classifyError(err, errorMsg);
+                    capturedError = err;
+                    break;
+                } finally {
+                    if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+                }
+            }
+        } else {
+            // Single-run mode: use job-embedded input / expectedOutput
+            let inputPath;
+            try {
+                inputPath = input ? await generateInputFile(input) : null;
+                const result = await runExecutor(language, filepath, inputPath);
+                totalTime = result.time;
+                peakMemory = result.memory;
+                finalOutput = result.output;
 
-        status = "Accepted";
-        if (expectedOutput !== undefined) {
-            if (normalize(finalOutput) !== normalize(expectedOutput)) {
-                status = "Wrong Answer";
+                status = "Accepted";
+                if (expectedOutput !== undefined && normalize(finalOutput) !== normalize(expectedOutput)) {
+                    status = "Wrong Answer";
+                }
+            } catch (err) {
+                errorMsg = err.message || "Unknown error";
+                status = classifyError(err, errorMsg);
+                capturedError = err;
+            } finally {
+                if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
             }
         }
-
     } catch (err) {
         errorMsg = err.message || "Unknown error";
-        status = err.type || "Runtime Error";
-        const msg = errorMsg.toLowerCase();
-
-        if (msg.includes("tle") || msg.includes("time limit")) {
-            status = "Time Limit Exceeded";
-        } else if (
-            msg.includes("error:") || msg.includes("compilation") ||
-            msg.includes("syntaxerror") || msg.includes("javac") ||
-            msg.includes("gcc") || msg.includes("g++")
-        ) {
-            status = "Compilation Error";
-        }
+        status = classifyError(err, errorMsg);
         capturedError = err;
     }
 
-    console.log(`[JOB ${job.id}] STATUS: ${status}`);
+    console.log(`[JOB ${job.id}] Time: ${totalTime.toFixed(2)} ms | Memory: ${peakMemory.toFixed(2)} MB | STATUS: ${status}`);
     if (errorMsg && (status === "Compilation Error" || status === "Runtime Error")) {
-        console.log(`[JOB ${job.id}] ERROR DETAILS:\n${errorMsg}`);
+        console.log(`[JOB ${job.id}] ERROR:\n${errorMsg}`);
     }
-    
+
     try {
         if (submissionId) {
             await Submission.update(
@@ -99,11 +132,10 @@ const worker = new Worker("python-codes", async (job) => {
 
             await ExecutionMetrics.upsert({
                 submissionId,
-                execution_time_ms: executionTime,
-                memory_used_mb: memoryUsed
+                execution_time_ms: totalTime,
+                memory_used_mb: peakMemory
             });
 
-            // Anti-cheat (only on successful compilation/execution)
             if (status !== "Compilation Error" && status !== "System Error") {
                 storeFingerprint(submissionId, code, language, problemId)
                     .then(() => anticheatQueue.add('check', { submissionId, problemId, language }))
@@ -113,14 +145,10 @@ const worker = new Worker("python-codes", async (job) => {
     } catch (dbErr) {
         console.error(`[JOB ${job.id}] DB Finalize Error:`, dbErr.message);
     } finally {
-        // Cleanup files
         if (filepath && fs.existsSync(filepath)) fs.unlinkSync(filepath);
-        if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
     }
 
-    if (capturedError) {
-        throw capturedError;
-    }
+    if (capturedError) throw capturedError;
     return finalOutput;
 
 }, {
@@ -128,4 +156,8 @@ const worker = new Worker("python-codes", async (job) => {
     concurrency: 1
 });
 
-console.log("Multi-Language Worker is live! Waiting for jobs...");
+worker.on("ready", () => console.log("Multi-Language Worker is live! Waiting for jobs..."));
+worker.on("active", (job) => console.log(`[JOB ${job.id}] Active`));
+worker.on("completed", (job) => console.log(`[JOB ${job.id}] Completed`));
+worker.on("failed", (job, err) => console.error(`[JOB ${job?.id}] Failed:`, err.message));
+worker.on("error", (err) => console.error("Worker error:", err));
