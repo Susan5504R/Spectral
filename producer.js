@@ -32,8 +32,6 @@ async function addSubmissionToQueue(language, userCode, userInput) {
     console.log(`Job added! Submission ID: ${submissionId} | Language: ${language}`);
 }
 
-// --- TESTING DIFFERENT LANGUAGES ---
-
 // Test C++
 const cppCode = `#include <iostream>\nint main() { int a; std::cin >> a; std::cout << a * 2; return 0; }`;
 addSubmissionToQueue("cpp", cppCode, "50");

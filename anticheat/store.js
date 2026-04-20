@@ -1,0 +1,20 @@
+const { ASTFingerprint } = require('../db');
+const { getTokensAndHistogram } = require('./astParser');
+
+async function storeFingerprint(submissionId, code, lang, problemId) {
+    try {
+        const { tokens, histogram } = await getTokensAndHistogram(code, lang);
+        await ASTFingerprint.create({
+            submissionId,
+            problemId: problemId || 'default',
+            language: lang,
+            tokens: JSON.stringify(tokens),
+            histogram
+        });
+        console.log(`Fingerprint stored for submission: ${submissionId}`);
+    } catch (e) {
+        console.error(`Failed to store fingerprint for submission ${submissionId}:`, e.message);
+    }
+}
+
+module.exports = { storeFingerprint };

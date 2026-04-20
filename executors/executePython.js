@@ -58,7 +58,7 @@ const executePython = (filepath, inputPath) => {
         childProcess.stdout.on("data", (data) => handleData(data, false));
         childProcess.stderr.on("data", (data) => handleData(data, true));
 
-        // 3. CLOSE LOGIC (This is what makes the worker move to the next job!)
+        // 3. CLOSE LOGIC (This is what makes the worker move to the next job)
         childProcess.on("close", (code) => {
             clearTimeout(timeoutId);
             if (killed) return;

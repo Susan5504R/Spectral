@@ -1,9 +1,10 @@
-const { Worker } = require("bullmq");
+const { Worker, Queue } = require("bullmq");
 const fs = require("fs");
 const path = require("path");
 
 // 1. IMPORT YOUR DATABASE MODEL
 const { Submission } = require("./db"); 
+const { storeFingerprint } = require("./anticheat/store");
 
 // Import all executors
 const { executeCpp } = require("./executors/executeCpp");
@@ -16,11 +17,16 @@ const { generateInputFile } = require("./generateInputFile");
 
 const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1";
 
+const anticheatQueue = new Queue("anticheat", {
+    connection: { host: REDIS_HOST, port: 6379 }
+});
+
+
 const worker = new Worker("python-codes", async (job) => {
     // 2. Extract submissionId so we know which DB row to update
-    const { code, input, language, submissionId } = job.data; 
+    const { code, input, language, submissionId, problemId } = job.data; 
     
-    console.log(`\n[JOB ${job.id}] Processing ${language.toUpperCase()}...`);
+    console.log(`\n[JOB ${job.id}] Processing ${language.toUpperCase()} for problem ${problemId}...`);
 
     let filepath, inputPath;
     const extensionMap = { cpp: "cpp", c: "c", python: "py", java: "java" };
@@ -48,6 +54,11 @@ const worker = new Worker("python-codes", async (job) => {
                 { output: finalOutput, status: "Accepted" },
                 { where: { id: submissionId } }
             );
+            
+            // Fire and forget AST fingerprint storage
+            storeFingerprint(submissionId, code, language, problemId).then(() => {
+                return anticheatQueue.add('check', { submissionId, problemId, language });
+            }).catch(e => console.error('fingerprint err:', e));
         }
 
         return finalOutput;
