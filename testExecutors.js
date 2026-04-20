@@ -1,7 +1,7 @@
 const { Queue } = require("bullmq");
 const { v4: uuidv4 } = require("uuid"); 
 
-const testQueue = new Queue("python-codes", { connection: { host: "127.0.0.1" } });
+const testQueue = new Queue("python-codes", { connection: { host: "127.0.0.1" , port: 6380} });
 
 const testCases = [
     {
