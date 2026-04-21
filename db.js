@@ -50,7 +50,7 @@ const PlagiarismCheck = sequelize.define('PlagiarismCheck', {
     verdict:       { type: DataTypes.STRING, defaultValue: 'pending' }
 });
 
-sequelize.sync().catch(err => {
+sequelize.sync({ alter: true }).catch(err => {
     console.error('[DB] Sync error:', err.message);
 });
 

@@ -53,7 +53,7 @@ const testCases = [
 ];
 
 async function runTests() {
-    console.log("🚀 Running Comprehensive Executor Tests...");
+    console.log("Running Comprehensive Executor Tests...");
 
     for (const test of testCases) {
         await Submission.create({

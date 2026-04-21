@@ -17,7 +17,7 @@ const executeJava = (filepath, inputPath) => {
         if (inputPath) innerCmd += ` < /sandbox/inputs/${inputFilename}`;
         
         // Append memory tracking
-        innerCmd = `${innerCmd}; RET=$?; echo "METRICS_MEM $(cat /sys/fs/cgroup/memory.peak)" >&2; exit $RET`;
+        innerCmd = `${innerCmd}; RET=$?; echo "METRICS_MEM $(cat /sys/fs/cgroup/memory.peak 2>/dev/null || echo 0)" >&2; exit $RET`;
 
         const args = [
             "run", "--rm", "--network=none",
@@ -73,7 +73,7 @@ const executeJava = (filepath, inputPath) => {
             const time = Number(endTime - startTime) / 1e6; // ms
 
             if (code !== 0) {
-                if (errorData.toLowerCase().includes("error") || errorData.toLowerCase().includes("java")) {
+                if (errorData.toLowerCase().includes("error:")) {
                     const err = new Error(errorData);
                     err.type = "Compilation Error";
                     return reject(err);

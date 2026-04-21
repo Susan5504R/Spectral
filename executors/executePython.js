@@ -17,7 +17,7 @@ const executePython = (filepath, inputPath) => {
         if (inputPath) innerCmd += ` < /sandbox/inputs/${inputFilename}`;
         
         // Append memory tracking
-        innerCmd = `${innerCmd}; RET=$?; echo "METRICS_MEM $(cat /sys/fs/cgroup/memory.peak)" >&2; exit $RET`;
+        innerCmd = `${innerCmd}; RET=$?; echo "METRICS_MEM $(cat /sys/fs/cgroup/memory.peak 2>/dev/null || echo 0)" >&2; exit $RET`;
 
         const args = [
             "run", "--rm", "--network=none",

@@ -33,7 +33,7 @@ const worker = new Worker("python-codes", async (job) => {
     let memoryUsed = 0;
     let status = "Pending";
     let finalOutput = "";
-    let errorMsg = null;
+    let errorMsg = null, capturedError = null;
     let filepath, inputPath;
 
     console.log(`\n[JOB ${job.id}] Processing ${language.toUpperCase()} for problem ${problemId}...`);
@@ -84,6 +84,7 @@ const worker = new Worker("python-codes", async (job) => {
         ) {
             status = "Compilation Error";
         }
+        capturedError = err;
     }
 
     // 🔥 Final Status Update
@@ -120,6 +121,9 @@ const worker = new Worker("python-codes", async (job) => {
         if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
     }
 
+    if (capturedError) {
+        throw capturedError;
+    }
     return finalOutput;
 
 }, {

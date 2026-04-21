@@ -50,4 +50,6 @@ async function runTests() {
     process.exit(0);
 }
 
-runTests();
+if (require.main === module) {
+    runTests();
+}
