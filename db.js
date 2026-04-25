@@ -9,6 +9,27 @@ const sequelize = new Sequelize('postgres', 'postgres', 'mysecretpassword', {
     port: Number(process.env.DB_PORT || defaultDbPort),
     logging: false
 });
+
+const User = sequelize.define("User", {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    username: { type: DataTypes.STRING, unique: true, allowNull: false },
+    password: { type: DataTypes.STRING, allowNull: false },
+});
+
+const Problem = sequelize.define("Problem", {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    title: { type: DataTypes.STRING, allowNull: false },
+    description: { type: DataTypes.TEXT },
+    difficulty: { type: DataTypes.ENUM('Easy', 'Medium', 'Hard') },
+});
+
+const TestCase = sequelize.define("TestCase", {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    input: { type: DataTypes.TEXT, allowNull: false },
+    expectedOutput: { type: DataTypes.TEXT, allowNull: false },
+    isHidden: { type: DataTypes.BOOLEAN, defaultValue: true }
+});
+
 const Submission = sequelize.define("Submission", {
     id: { type: DataTypes.UUID, primaryKey: true },
     code: { type: DataTypes.TEXT, allowNull: false },
@@ -26,8 +47,6 @@ const ExecutionMetrics = sequelize.define("ExecutionMetrics", {
     execution_time_ms: { type: DataTypes.FLOAT },
     memory_used_mb: { type: DataTypes.FLOAT }
 });
-ExecutionMetrics.belongsTo(Submission, { foreignKey: "submissionId" });
-Submission.hasOne(ExecutionMetrics, { foreignKey: "submissionId" });
 
 const ASTFingerprint = sequelize.define('ASTFingerprint', {
     submissionId: { type: DataTypes.UUID, unique: true },
@@ -50,6 +69,16 @@ const PlagiarismCheck = sequelize.define('PlagiarismCheck', {
     verdict:       { type: DataTypes.STRING, defaultValue: 'pending' }
 });
 
+// Relationships
+User.hasMany(Submission, { foreignKey: "userId" });
+Submission.belongsTo(User, { foreignKey: "userId" });
+
+Problem.hasMany(TestCase, { foreignKey: "problemId" });
+TestCase.belongsTo(Problem, { foreignKey: "problemId" });
+
+ExecutionMetrics.belongsTo(Submission, { foreignKey: "submissionId" });
+Submission.hasOne(ExecutionMetrics, { foreignKey: "submissionId" });
+
 sequelize.sync({ alter: true }).catch(err => {
     if (err.original && err.original.code === '42701') {
         console.log('[DB] Tables already up to date.');
@@ -58,10 +87,13 @@ sequelize.sync({ alter: true }).catch(err => {
     }
 });
 
-module.exports = { 
-    sequelize, 
-    Submission, 
-    ASTFingerprint, 
+module.exports = {
+    sequelize,
+    User,
+    Problem,
+    TestCase,
+    Submission,
+    ASTFingerprint,
     PlagiarismCheck,
     ExecutionMetrics
 };
