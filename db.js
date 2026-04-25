@@ -50,6 +50,7 @@ const ExecutionMetrics = sequelize.define("ExecutionMetrics", {
 
 const ASTFingerprint = sequelize.define('ASTFingerprint', {
     submissionId: { type: DataTypes.UUID, unique: true },
+    userId:       { type: DataTypes.UUID, allowNull: true },
     problemId:    { type: DataTypes.STRING },
     language:     { type: DataTypes.STRING },
     tokens:       { type: DataTypes.TEXT },
@@ -67,6 +68,36 @@ const PlagiarismCheck = sequelize.define('PlagiarismCheck', {
     aiScore:       { type: DataTypes.FLOAT, allowNull: true },
     aiExplanation: { type: DataTypes.TEXT, allowNull: true },
     verdict:       { type: DataTypes.STRING, defaultValue: 'pending' }
+});
+
+// ── AST Evolution Graph — Relational Tables ─────────────────────────────────
+
+/**
+ * Caches transformation label results for a (fromHash, toHash) pair.
+ * Prevents redundant rule-engine and Gemini calls for repeated code transitions.
+ * labeledBy: 'rule' = pattern matched in labeler.js, 'gemini' = AI fallback.
+ */
+const TransformationLabel = sequelize.define('TransformationLabel', {
+    id:         { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    fromHash:   { type: DataTypes.STRING(16), allowNull: false },
+    toHash:     { type: DataTypes.STRING(16), allowNull: false },
+    label:      { type: DataTypes.STRING,     allowNull: false },
+    confidence: { type: DataTypes.FLOAT,      defaultValue: 1.0 },
+    labeledBy:  { type: DataTypes.ENUM('rule', 'gemini'), defaultValue: 'rule' },
+});
+
+/**
+ * Records each hint request: which user asked, from which code state,
+ * what graph path was found, and what Gemini returned.
+ * Used for analytics and to avoid re-calling Gemini for the same state.
+ */
+const HintQuery = sequelize.define('HintQuery', {
+    id:          { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    userId:      { type: DataTypes.STRING, allowNull: false },
+    problemId:   { type: DataTypes.STRING, allowNull: false },
+    fromHash:    { type: DataTypes.STRING(16), allowNull: false },
+    resultPath:  { type: DataTypes.JSONB, allowNull: true },  // array of transformation labels
+    geminiHint:  { type: DataTypes.TEXT,  allowNull: true },
 });
 
 // Relationships
@@ -95,5 +126,7 @@ module.exports = {
     Submission,
     ASTFingerprint,
     PlagiarismCheck,
-    ExecutionMetrics
+    ExecutionMetrics,
+    TransformationLabel,
+    HintQuery,
 };

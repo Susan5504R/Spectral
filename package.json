@@ -4,7 +4,12 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:anticheat": "node anticheat/tests/test_logic_rapid.js"
+    "test:anticheat": "node anticheat/tests/test_logic_rapid.js",
+    "graph:schema": "cross-env DB_HOST=127.0.0.1 DB_PORT=5433 node graph/schema.js",
+    "graph:verify": "cross-env DB_HOST=127.0.0.1 DB_PORT=5433 node graph/tests/phase1_verify.js",
+    "graph:ted-test": "node graph/tests/tedTests.js",
+    "graph:label-test": "node graph/tests/labelerTests.js",
+    "graph:e2e-test": "cross-env DB_HOST=127.0.0.1 DB_PORT=5433 node graph/tests/phase4_verify.js"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +37,7 @@
     "web-tree-sitter": "^0.22.6"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "tree-sitter-cli": "^0.26.8"
   }
 }

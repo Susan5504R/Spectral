@@ -5,6 +5,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { User, Submission, Problem, TestCase, PlagiarismCheck } = require("./db");
 const { authenticateToken, SECRET } = require("./auth");
+const graphClient = require('./graph/client');
+const { getOrGenerateHint } = require('./graph/hintEngine');
 
 const app = express();
 app.use(express.json());
@@ -20,10 +22,15 @@ const anticheatQueue = new Queue("anticheat", {
     connection: { host: REDIS_HOST, port: REDIS_PORT },
 });
 
-app.get("/status/:id", async (req, res) => {
+app.get("/status/:id", authenticateToken, async (req, res) => {
     try {
         const submission = await Submission.findByPk(req.params.id);
         if (!submission) return res.status(404).json({ error: "Submission not found" });
+        
+        // Ownership check
+        if (submission.userId !== req.user.id) {
+            return res.status(403).json({ error: "Access denied. You can only view your own submissions." });
+        }
         res.json({
             id: submission.id,
             status: submission.status,
@@ -75,7 +82,8 @@ app.post("/submit", authenticateToken, async (req, res) => {
             submissionId,
             code,
             language: language || "cpp",
-            problemId
+            problemId,
+            userId: req.user.id
         });
 
         return res.status(202).json({ submissionId, jobId: job.id });
@@ -97,10 +105,18 @@ app.post("/admin/problem", async (req, res) => {
     }
 });
 
-app.get("/plagiarism/:submissionId", async (req, res) => {
+app.get("/plagiarism/:submissionId", authenticateToken, async (req, res) => {
     try {
         const { Op } = require("sequelize");
         const submissionId = req.params.submissionId;
+
+        const sub = await Submission.findByPk(submissionId);
+        if (!sub) return res.status(404).json({ error: "Submission not found" });
+
+        // Ownership check
+        if (sub.userId !== req.user.id) {
+            return res.status(403).json({ error: "Access denied." });
+        }
         const checks = await PlagiarismCheck.findAll({
             where: {
                 [Op.or]: [
@@ -165,6 +181,60 @@ app.post("/plagiarism/check", async (req, res) => {
         res.json({ message: "Check queued manually" });
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── Phase 5: Graph & Hint Endpoints ──────────────────────────────────────────
+
+app.get("/hint/:submissionId", async (req, res) => {
+    try {
+        const hintData = await getOrGenerateHint(req.params.submissionId);
+        res.json(hintData);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/graph/problem/:problemId/patterns", async (req, res) => {
+    try {
+        const cypher = `
+            MATCH (a:CodeState {problemId: '${req.params.problemId}'})-[e:TRANSFORMED]->()
+            UNWIND e.labels AS label
+            RETURN label, count(*) AS freq
+            ORDER BY freq DESC LIMIT 10
+        `;
+        const rows = await graphClient.cypher(cypher);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/graph/user/:userId/evolution", async (req, res) => {
+    try {
+        const subs = await Submission.findAll({
+            where: { userId: req.params.userId },
+            order: [['createdAt', 'ASC']],
+            attributes: ['id', 'status', 'problemId', 'createdAt']
+        });
+        res.json({ timeline: subs });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/graph/stats", async (req, res) => {
+    try {
+        const nodesQuery = await graphClient.cypher('MATCH (n:CodeState) RETURN count(n) AS nodeCount');
+        const edgesQuery = await graphClient.cypher('MATCH ()-[e:TRANSFORMED]->() RETURN count(e) AS edgeCount');
+        
+        res.json({
+            nodeCount: nodesQuery.length ? nodesQuery[0].nodeCount : 0,
+            edgeCount: edgesQuery.length ? edgesQuery[0].edgeCount : 0
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

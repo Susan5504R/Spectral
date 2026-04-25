@@ -19,6 +19,10 @@ const anticheatQueue = new Queue("anticheat", {
     connection: { host: REDIS_HOST, port: REDIS_PORT }
 });
 
+const evolutionQueue = new Queue("evolution-graph", {
+    connection: { host: REDIS_HOST, port: REDIS_PORT }
+});
+
 function normalize(str) {
     return String(str).trim().replace(/[ \t]+/g, " ").replace(/\r\n/g, "\n");
 }
@@ -45,7 +49,7 @@ async function runExecutor(language, filepath, inputPath) {
 }
 
 const worker = new Worker("python-codes", async (job) => {
-    const { code, input, language, submissionId, problemId, expectedOutput } = job.data;
+    const { code, input, language, submissionId, problemId, expectedOutput, userId } = job.data;
 
     let totalTime = 0, peakMemory = 0;
     let status = "Pending";
@@ -137,9 +141,12 @@ const worker = new Worker("python-codes", async (job) => {
             });
 
             if (status !== "Compilation Error" && status !== "System Error") {
-                storeFingerprint(submissionId, code, language, problemId)
-                    .then(() => anticheatQueue.add('check', { submissionId, problemId, language }))
+                storeFingerprint(submissionId, code, language, problemId, userId)
+                    .then(() => anticheatQueue.add('check', { submissionId, problemId, language, userId }))
                     .catch(e => console.error(`[JOB ${job.id}] Fingerprint error:`, e.message));
+                    
+                evolutionQueue.add('process', { submissionId, problemId, language })
+                    .catch(e => console.error(`[JOB ${job.id}] Evolution queue error:`, e.message));
             }
         }
     } catch (dbErr) {

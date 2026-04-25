@@ -1,11 +1,12 @@
 const { ASTFingerprint } = require('../db');
 const { getTokensAndHistogram } = require('./astParser');
 
-async function storeFingerprint(submissionId, code, lang, problemId) {
+async function storeFingerprint(submissionId, code, lang, problemId, userId) {
     try {
         const { tokens, histogram } = await getTokensAndHistogram(code, lang);
         await ASTFingerprint.create({
             submissionId,
+            userId,
             problemId: problemId || 'default',
             language: lang,
             tokens: JSON.stringify(tokens),
