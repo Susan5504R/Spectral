@@ -2,7 +2,7 @@ const { spawn } = require("child_process");
 const path = require("path");
 
 const DOCKER_IMAGE = "spectral-runner";
-const MAX_OUTPUT_SIZE = 1024 * 1024; // 1MB
+const MAX_OUTPUT_SIZE = 1024 * 1024;
 
 const executeJava = (filepath, inputPath) => {
     const filename = path.basename(filepath);
@@ -10,77 +10,87 @@ const executeJava = (filepath, inputPath) => {
     const hostPath = process.env.HOST_PWD || path.resolve(__dirname, "..");
 
     return new Promise((resolve, reject) => {
-        const volumes = ["-v", `${hostPath}/codes:/sandbox/codes:ro` ];
-        if (inputPath) {
-            volumes.push("-v", `${hostPath}/inputs:/sandbox/inputs:ro`);
-        }
+        const volumes = ["-v", `${hostPath}/codes:/sandbox/codes:ro`];
+        if (inputPath) volumes.push("-v", `${hostPath}/inputs:/sandbox/inputs:ro`);
 
-        /** * CHANGE: Instead of 'javac' + 'java Main', we run 'java filename.java'.
-         * This handles any class name the user provides and doesn't care about 
-         * the 'public class Main' naming restriction.
-         */
         let innerCmd = `java /sandbox/codes/${filename}`;
-        if (inputPath) {
-            innerCmd += ` < /sandbox/inputs/${inputFilename}`;
-        }
+        if (inputPath) innerCmd += ` < /sandbox/inputs/${inputFilename}`;
+        
+        // Append memory tracking
+        innerCmd = `${innerCmd}; RET=$?; echo "METRICS_MEM $(cat /sys/fs/cgroup/memory.peak 2>/dev/null || echo 0)" >&2; exit $RET`;
 
         const args = [
-            "run", "--rm", "--network=none", 
-            "--memory=128m", "--cpus=0.5", 
+            "run", "--rm", "--network=none",
+            "--memory=256m", "--cpus=0.5",
             ...volumes, DOCKER_IMAGE, "sh", "-c", innerCmd
         ];
 
-        let outputData = "";
-        let errorData = "";
-        let outputSize = 0;
-        let killed = false;
+        let outputData = "", errorData = "", outputSize = 0, killed = false;
+        const startTime = process.hrtime.bigint();
 
-        const childProcess = spawn("docker", args);
+        const child = spawn("docker", args);
 
-        // 1. Time Limit Exceeded (TLE) Protection
         const timeoutId = setTimeout(() => {
             killed = true;
-            childProcess.kill("SIGKILL");
-            reject({ type: "Runtime Error", message: "TLE (Time Limit Exceeded)" });
+            child.kill("SIGKILL");
+            const err = new Error("TLE (Time Limit Exceeded)");
+            err.type = "Time Limit Exceeded";
+            reject(err);
         }, 10000);
 
-        // 2. Output Stream Handling
-        const handleData = (data, isErrorStream) => {
+        const handleData = (data, isErr) => {
             if (killed) return;
             outputSize += data.length;
-            
+
             if (outputSize > MAX_OUTPUT_SIZE) {
                 killed = true;
-                childProcess.kill("SIGKILL");
+                child.kill("SIGKILL");
                 clearTimeout(timeoutId);
-                return reject({ type: "Runtime Error", message: "Output Limit Exceeded" });
+                const err = new Error("Output Limit Exceeded");
+                err.type = "Runtime Error";
+                return reject(err);
             }
 
-            if (isErrorStream) errorData += data.toString();
+            if (isErr) errorData += data.toString();
             else outputData += data.toString();
         };
 
-        childProcess.stdout.on("data", (data) => handleData(data, false));
-        childProcess.stderr.on("data", (data) => handleData(data, true));
+        child.stdout.on("data", d => handleData(d, false));
+        child.stderr.on("data", d => handleData(d, true));
 
-        // 3. Process Exit Handling
-        childProcess.on("close", (code) => {
+        child.on("close", (code) => {
+            const endTime = process.hrtime.bigint();
             clearTimeout(timeoutId);
             if (killed) return;
 
-            if (code !== 0) {
-                // With this mode, errors come as Runtime/Compilation errors in stderr
-                return reject({ 
-                    type: errorData.toLowerCase().includes("error") ? "Error" : "Runtime Error", 
-                    message: errorData || `Exited with code ${code}` 
-                });
+            // Extract metrics from errorData
+            let memory = 0;
+            const metricsMatch = errorData.match(/METRICS_MEM (\d+)/);
+            if (metricsMatch) {
+                memory = parseInt(metricsMatch[1]) / 1024 / 1024; // MB
+                errorData = errorData.replace(/METRICS_MEM \d+\n?/, "").trim();
             }
-            resolve(outputData);
+            const time = Number(endTime - startTime) / 1e6; // ms
+
+            if (code !== 0) {
+                if (errorData.toLowerCase().includes("error:")) {
+                    const err = new Error(errorData);
+                    err.type = "Compilation Error";
+                    return reject(err);
+                }
+                const err = new Error(errorData || `Exited with code ${code}`);
+                err.type = "Runtime Error";
+                return reject(err);
+            }
+
+            resolve({ output: outputData, time, memory });
         });
 
-        childProcess.on("error", (err) => {
+        child.on("error", (e) => {
             clearTimeout(timeoutId);
-            reject({ type: "System Error", message: err.message });
+            const err = new Error(e.message);
+            err.type = "System Error";
+            reject(err);
         });
     });
 };

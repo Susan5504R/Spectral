@@ -20,6 +20,15 @@ const Submission = sequelize.define("Submission", {
     error: { type: DataTypes.TEXT }
 });
 
+const ExecutionMetrics = sequelize.define("ExecutionMetrics", {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    submissionId: { type: DataTypes.UUID, allowNull: false },
+    execution_time_ms: { type: DataTypes.FLOAT },
+    memory_used_mb: { type: DataTypes.FLOAT }
+});
+ExecutionMetrics.belongsTo(Submission, { foreignKey: "submissionId" });
+Submission.hasOne(ExecutionMetrics, { foreignKey: "submissionId" });
+
 const ASTFingerprint = sequelize.define('ASTFingerprint', {
     submissionId: { type: DataTypes.UUID, unique: true },
     problemId:    { type: DataTypes.STRING },
@@ -42,12 +51,13 @@ const PlagiarismCheck = sequelize.define('PlagiarismCheck', {
 });
 
 sequelize.sync({ alter: true }).catch(err => {
-    // Ignore "column already exists" errors from concurrent container startup race
-    if (err.original && err.original.code === '42701') {
-        console.log('[DB] Tables already up to date.');
-    } else {
-        console.error('[DB] Sync error:', err.message);
-    }
+    console.error('[DB] Sync error:', err.message);
 });
 
-module.exports = { sequelize, Submission, ASTFingerprint, PlagiarismCheck };
+module.exports = { 
+    sequelize, 
+    Submission, 
+    ASTFingerprint, 
+    PlagiarismCheck,
+    ExecutionMetrics   // 🔥 ADD THIS
+};
