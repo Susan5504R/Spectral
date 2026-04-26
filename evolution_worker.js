@@ -211,12 +211,12 @@ module.exports = { processEvolutionParams };
 process.on('SIGINT', async () => {
     console.log('\n[Evolution Worker] Shutting down...');
     await worker.close();
-    await graphClient.close();
+    await graphClient.pool.end();
     process.exit(0);
 });
 process.on('SIGTERM', async () => {
     console.log('\n[Evolution Worker] Terminating...');
     await worker.close();
-    await graphClient.close();
+    await graphClient.pool.end();
     process.exit(0);
 });

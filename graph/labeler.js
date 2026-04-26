@@ -365,7 +365,7 @@ async function label(ops, code1, code2, lang, hash1 = null, hash2 = null) {
         };
     } catch (e) {
         console.error('[Labeler] Gemini fallback failed:', e.message);
-        return { labels: ['Unknown Change'], source: 'fallback', confidence: 0 };
+        return { labels: ['Unknown Change'], source: 'rule', confidence: 0 };
     }
 }
 

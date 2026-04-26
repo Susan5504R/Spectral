@@ -101,22 +101,22 @@ services:
   # ── Evolution Worker (Phase 4 — skeleton ready, activated in Phase 4) ─────
   # Uncomment this block when evolutionWorker.js is created in Phase 4.
   #
-  # evolution-worker:
-  #   build: .
-  #   container_name: spectral-evolution
-  #   command: node evolutionWorker.js
-  #   environment:
-  #     - DB_HOST=${DB_HOST}
-  #     - REDIS_HOST=${REDIS_HOST}
-  #     - GEMINI_API_KEY=${GEMINI_API_KEY}
-  #     - POSTGRES_USER=${POSTGRES_USER}
-  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-  #     - POSTGRES_DB=${POSTGRES_DB}
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_started
+  evolution-worker:
+    build: .
+    container_name: spectral-evolution
+    command: node evolution_worker.js
+    environment:
+      - DB_HOST=${DB_HOST}
+      - REDIS_HOST=${REDIS_HOST}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   pgdata:

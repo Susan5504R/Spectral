@@ -26,7 +26,7 @@ function getModel() {
         const key = process.env.GEMINI_API_KEY;
         if (!key) throw new Error('[GeminiLabeler] GEMINI_API_KEY is not set');
         const genai = new GoogleGenerativeAI(key);
-        _model = genai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        _model = genai.getGenerativeModel({ model: 'gemini-2.5-flash' });
     }
     return _model;
 }
