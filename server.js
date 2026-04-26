@@ -3,7 +3,18 @@ const { Queue } = require("bullmq");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { User, Submission, Problem, TestCase, PlagiarismCheck } = require("./db");
+const {
+    User,
+    Submission,
+    Problem,
+    TestCase,
+    PlagiarismCheck,
+    Topic,
+    UserProblem,
+    FavouriteProblem,
+    ExecutionMetrics
+} = require("./db");
+// const { User, Submission, Problem, TestCase, PlagiarismCheck } = require("./db");
 const { authenticateToken, SECRET } = require("./auth");
 const graphClient = require('./graph/client');
 const { getOrGenerateHint } = require('./graph/hintEngine');
@@ -21,7 +32,250 @@ const submissionQueue = new Queue("python-codes", {
 const anticheatQueue = new Queue("anticheat", {
     connection: { host: REDIS_HOST, port: REDIS_PORT },
 });
+app.get("/problems", authenticateToken, async (req, res) => {
+    try {
+        const { search, difficulty, topic } = req.query;
+        const { Op } = require("sequelize");
 
+        const where = {};
+
+        if (search) {
+            where.title = { [Op.iLike]: `%${search}%` };
+        }
+
+        if (difficulty) {
+            where.difficulty = difficulty;
+        }
+
+        const problems = await Problem.findAll({
+            where,
+            include: [
+                {
+                    model: Topic,
+                    where: topic ? { name: topic } : undefined,
+                    required: !!topic
+                }
+            ],
+            order: [["createdAt", "DESC"]]
+        });
+
+        const solvedRows = await UserProblem.findAll({
+            where: {
+                UserId: req.user.id,
+                status: "Solved"
+            }
+        });
+
+        const favouriteRows = await FavouriteProblem.findAll({
+            where: {
+                UserId: req.user.id
+            }
+        });
+
+        const solvedSet = new Set(solvedRows.map(row => row.ProblemId));
+        const favouriteSet = new Set(favouriteRows.map(row => row.ProblemId));
+
+        const result = problems.map(problem => ({
+            id: problem.id,
+            title: problem.title,
+            description: problem.description,
+            difficulty: problem.difficulty,
+            topics: problem.Topics?.map(t => t.name) || [],
+            solved: solvedSet.has(problem.id),
+            favourite: favouriteSet.has(problem.id)
+        }));
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/problems/:id", authenticateToken, async (req, res) => {
+    try {
+        const problem = await Problem.findByPk(req.params.id, {
+            include: [Topic]
+        });
+
+        if (!problem) {
+            return res.status(404).json({ error: "Problem not found" });
+        }
+
+        const solved = await UserProblem.findOne({
+            where: {
+                UserId: req.user.id,
+                ProblemId: req.params.id,
+                status: "Solved"
+            }
+        });
+
+        const favourite = await FavouriteProblem.findOne({
+            where: {
+                UserId: req.user.id,
+                ProblemId: req.params.id
+            }
+        });
+
+        res.json({
+            id: problem.id,
+            title: problem.title,
+            description: problem.description,
+            difficulty: problem.difficulty,
+            topics: problem.Topics?.map(t => t.name) || [],
+            solved: !!solved,
+            favourite: !!favourite
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.post("/run", authenticateToken, async (req, res) => {
+    try {
+        const { code, language, input } = req.body;
+        const submissionId = uuidv4();
+
+        await Submission.create({
+            id: submissionId,
+            code,
+            language: language || "cpp",
+            input,
+            userId: req.user.id,
+            status: "Pending"
+        });
+
+        const job = await submissionQueue.add("execute-code", {
+            submissionId,
+            code,
+            language: language || "cpp",
+            input,
+            userId: req.user.id
+        });
+
+        res.status(202).json({
+            submissionId,
+            jobId: job.id
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to run code" });
+    }
+});
+app.post("/problems/:id/favourite", authenticateToken, async (req, res) => {
+    try {
+        await FavouriteProblem.findOrCreate({
+            where: {
+                UserId: req.user.id,
+                ProblemId: req.params.id
+            }
+        });
+
+        res.json({ message: "Added to favourites" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete("/problems/:id/favourite", authenticateToken, async (req, res) => {
+    try {
+        await FavouriteProblem.destroy({
+            where: {
+                UserId: req.user.id,
+                ProblemId: req.params.id
+            }
+        });
+
+        res.json({ message: "Removed from favourites" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/me/favourites", authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.user.id, {
+            include: [
+                {
+                    model: Problem,
+                    as: "FavouriteProblems",
+                    include: [Topic]
+                }
+            ]
+        });
+
+        res.json(user.FavouriteProblems || []);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/me/profile", authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.user.id, {
+            attributes: ["id", "username", "createdAt"]
+        });
+
+        const solvedRows = await UserProblem.findAll({
+            where: {
+                UserId: req.user.id,
+                status: "Solved"
+            }
+        });
+
+        const problemIds = solvedRows.map(row => row.ProblemId);
+
+        const solvedProblems = await Problem.findAll({
+            where: {
+                id: problemIds
+            },
+            include: [Topic]
+        });
+
+        const totalSolved = solvedProblems.length;
+
+        const breakdown = {
+            Easy: 0,
+            Medium: 0,
+            Hard: 0
+        };
+
+        const topicBreakdown = {};
+
+        for (const problem of solvedProblems) {
+            if (problem?.difficulty) {
+                breakdown[problem.difficulty]++;
+            }
+
+            for (const topic of problem?.Topics || []) {
+                topicBreakdown[topic.name] = (topicBreakdown[topic.name] || 0) + 1;
+            }
+        }
+
+        res.json({
+            user,
+            stats: {
+                totalSolved,
+                breakdown,
+                topicBreakdown
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put("/me/profile", authenticateToken, async (req, res) => {
+    try {
+        const { username, bio, avatarUrl } = req.body;
+
+        await User.update(
+            { username, bio, avatarUrl },
+            { where: { id: req.user.id } }
+        );
+
+        res.json({ message: "Profile updated" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 app.get("/status/:id", authenticateToken, async (req, res) => {
     try {
         const submission = await Submission.findByPk(req.params.id);
@@ -42,14 +296,43 @@ app.get("/status/:id", authenticateToken, async (req, res) => {
     }
 });
 
+// app.post("/register", async (req, res) => {
+//     try {
+//         const { username, password } = req.body;
+//         const hashedPassword = await bcrypt.hash(password, 10);
+//         const user = await User.create({ username, password: hashedPassword });
+//         res.status(201).json({ message: "User created", userId: user.id });
+//     } catch (err) {
+//         res.status(400).json({ error: "Username already exists" });
+//     }
+// });
 app.post("/register", async (req, res) => {
     try {
         const { username, password } = req.body;
+
+        console.log("Register body:", req.body);
+
+        const existingUser = await User.findOne({ where: { username } });
+
+        if (existingUser) {
+            return res.status(400).json({ error: "Username already exists" });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await User.create({ username, password: hashedPassword });
-        res.status(201).json({ message: "User created", userId: user.id });
+
+        const user = await User.create({
+            username,
+            password: hashedPassword
+        });
+
+        res.status(201).json({
+            message: "User created",
+            userId: user.id
+        });
+
     } catch (err) {
-        res.status(400).json({ error: "Username already exists" });
+        console.error("REGISTER ERROR:", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -95,11 +378,45 @@ app.post("/submit", authenticateToken, async (req, res) => {
 
 app.post("/admin/problem", async (req, res) => {
     try {
-        const { title, description, testCases } = req.body;
-        const problem = await Problem.create({ title, description });
-        const cases = testCases.map(tc => ({ ...tc, problemId: problem.id }));
+        const {
+            title,
+            description,
+            difficulty,
+            topics = [],
+            testCases = []
+        } = req.body;
+
+        const problem = await Problem.create({
+            title,
+            description,
+            difficulty
+        });
+
+        const topicRows = [];
+
+        for (const topicName of topics) {
+            const [topic] = await Topic.findOrCreate({
+                where: { name: topicName }
+            });
+
+            topicRows.push(topic);
+        }
+
+        await problem.setTopics(topicRows);
+
+        const cases = testCases.map(tc => ({
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            isHidden: tc.isHidden ?? true,
+            problemId: problem.id
+        }));
+
         await TestCase.bulkCreate(cases);
-        res.status(201).json({ message: "Problem created", problemId: problem.id });
+
+        res.status(201).json({
+            message: "Problem created",
+            problemId: problem.id
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

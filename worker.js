@@ -1,7 +1,6 @@
 const { Worker, Queue } = require("bullmq");
 const fs = require("fs");
-
-const { Submission, ExecutionMetrics, TestCase } = require("./db");
+const { Submission, ExecutionMetrics, TestCase, UserProblem } = require("./db");
 const { storeFingerprint } = require("./anticheat/store");
 
 const { executeCpp } = require("./executors/executeCpp");
@@ -139,6 +138,25 @@ const worker = new Worker("python-codes", async (job) => {
                 execution_time_ms: totalTime,
                 memory_used_mb: peakMemory
             });
+            if (userId && problemId) {
+    if (status === "Accepted") {
+        await UserProblem.upsert({
+            UserId: userId,
+            ProblemId: problemId,
+            status: "Solved"
+        });
+    } else {
+        await UserProblem.findOrCreate({
+            where: {
+                UserId: userId,
+                ProblemId: problemId
+            },
+            defaults: {
+                status: "Attempted"
+            }
+        });
+    }
+}
 
             if (status !== "Compilation Error" && status !== "System Error") {
                 storeFingerprint(submissionId, code, language, problemId, userId)

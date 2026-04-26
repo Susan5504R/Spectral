@@ -14,6 +14,8 @@ const User = sequelize.define("User", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     username: { type: DataTypes.STRING, unique: true, allowNull: false },
     password: { type: DataTypes.STRING, allowNull: false },
+    bio: { type: DataTypes.TEXT },
+avatarUrl: { type: DataTypes.STRING }
 });
 
 const Problem = sequelize.define("Problem", {
@@ -34,7 +36,7 @@ const Submission = sequelize.define("Submission", {
     id: { type: DataTypes.UUID, primaryKey: true },
     code: { type: DataTypes.TEXT, allowNull: false },
     language: { type: DataTypes.TEXT, allowNull: false },
-    problemId: { type: DataTypes.STRING, allowNull: true },
+    problemId: { type: DataTypes.UUID, allowNull: true },
     input: { type: DataTypes.TEXT },
     output: { type: DataTypes.TEXT },
     status: { type: DataTypes.STRING, defaultValue: "Pending" },
@@ -51,7 +53,7 @@ const ExecutionMetrics = sequelize.define("ExecutionMetrics", {
 const ASTFingerprint = sequelize.define('ASTFingerprint', {
     submissionId: { type: DataTypes.UUID, unique: true },
     userId:       { type: DataTypes.UUID, allowNull: true },
-    problemId:    { type: DataTypes.STRING },
+    problemId:    { type: DataTypes.UUID },
     language:     { type: DataTypes.STRING },
     tokens:       { type: DataTypes.TEXT },
     histogram:    { type: DataTypes.JSONB }
@@ -61,7 +63,7 @@ const PlagiarismCheck = sequelize.define('PlagiarismCheck', {
     id:            { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     sub1Id:        { type: DataTypes.UUID },
     sub2Id:        { type: DataTypes.UUID },
-    problemId:     { type: DataTypes.STRING },
+    problemId:     { type: DataTypes.UUID },
     language:      { type: DataTypes.STRING },
     cosineScore:   { type: DataTypes.FLOAT },
     jaccardScore:  { type: DataTypes.FLOAT },
@@ -94,10 +96,27 @@ const TransformationLabel = sequelize.define('TransformationLabel', {
 const HintQuery = sequelize.define('HintQuery', {
     id:          { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     userId:      { type: DataTypes.STRING, allowNull: false },
-    problemId:   { type: DataTypes.STRING, allowNull: false },
+    problemId:   { type: DataTypes.UUID, allowNull: false },
     fromHash:    { type: DataTypes.STRING(16), allowNull: false },
     resultPath:  { type: DataTypes.JSONB, allowNull: true },  // array of transformation labels
     geminiHint:  { type: DataTypes.TEXT,  allowNull: true },
+});
+
+const Topic = sequelize.define("Topic", {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    name: { type: DataTypes.STRING, unique: true, allowNull: false }
+});
+
+const UserProblem = sequelize.define("UserProblem", {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    status: {
+        type: DataTypes.ENUM("Attempted", "Solved"),
+        defaultValue: "Attempted"
+    }
+});
+
+const FavouriteProblem = sequelize.define("FavouriteProblem", {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true }
 });
 
 // Relationships
@@ -109,6 +128,15 @@ TestCase.belongsTo(Problem, { foreignKey: "problemId" });
 
 ExecutionMetrics.belongsTo(Submission, { foreignKey: "submissionId" });
 Submission.hasOne(ExecutionMetrics, { foreignKey: "submissionId" });
+
+Problem.belongsToMany(Topic, { through: "ProblemTopics" });
+Topic.belongsToMany(Problem, { through: "ProblemTopics" });
+
+User.belongsToMany(Problem, { through: UserProblem, as: "SolvedProblems" });
+Problem.belongsToMany(User, { through: UserProblem, as: "SolvedByUsers" });
+
+User.belongsToMany(Problem, { through: FavouriteProblem, as: "FavouriteProblems" });
+Problem.belongsToMany(User, { through: FavouriteProblem, as: "FavouritedByUsers" });
 
 sequelize.sync({ alter: true }).catch(err => {
     if (err.original && err.original.code === '42701') {
@@ -129,4 +157,7 @@ module.exports = {
     ExecutionMetrics,
     TransformationLabel,
     HintQuery,
+    Topic,
+UserProblem,
+FavouriteProblem,
 };
