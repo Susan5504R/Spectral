@@ -8,7 +8,7 @@
             "driver": "PostgreSQL",
             "name": "Spectral",
             "database": "postgres",
-            "password": "mysecretpassword",
+            "password": "mysecretpassword", 
             "username": "postgres"
         }
     ]

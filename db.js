@@ -1,23 +1,26 @@
 const { Sequelize, DataTypes } = require("sequelize");
 
-const dbHost = process.env.DB_HOST || "127.0.0.1";
-const defaultDbPort = dbHost === "127.0.0.1" || dbHost === "localhost" ? 5433 : 5432;
+const dbHost = process.env.DB_HOST || "db";
+const dbPort = process.env.DB_PORT || 5432;
+const dbName = process.env.POSTGRES_DB || "postgres";
+const dbUser = process.env.POSTGRES_USER || "postgres";
+const dbPass = process.env.POSTGRES_PASSWORD;
 
-const sequelize = new Sequelize('postgres', 'postgres', 'mysecretpassword', {
-    host: dbHost,
-    dialect: 'postgres',
-    port: Number(process.env.DB_PORT || defaultDbPort),
-    logging: false
+const sequelize = new Sequelize(dbName, dbUser, dbPass, {
+  host: dbHost,
+  dialect: 'postgres',
+  port: Number(dbPort),
+  logging: false,
 });
 const Submission = sequelize.define("Submission", {
-    id: { type: DataTypes.UUID, primaryKey: true },
-    code: { type: DataTypes.TEXT, allowNull: false },
-    language: { type: DataTypes.TEXT, allowNull: false },
+    id:        { type: DataTypes.UUID, primaryKey: true },
+    code:      { type: DataTypes.TEXT, allowNull: false },
+    language:  { type: DataTypes.TEXT, allowNull: false },
     problemId: { type: DataTypes.STRING, allowNull: true },
-    input: { type: DataTypes.TEXT },
-    output: { type: DataTypes.TEXT },
-    status: { type: DataTypes.STRING, defaultValue: "Pending" },
-    error: { type: DataTypes.TEXT }
+    input:     { type: DataTypes.TEXT },
+    output:    { type: DataTypes.TEXT },
+    status:    { type: DataTypes.STRING, defaultValue: "Pending" },
+    error:     { type: DataTypes.TEXT }
 });
 
 const ASTFingerprint = sequelize.define('ASTFingerprint', {
@@ -41,8 +44,44 @@ const PlagiarismCheck = sequelize.define('PlagiarismCheck', {
     verdict:       { type: DataTypes.STRING, defaultValue: 'pending' }
 });
 
+// ─── NEW: Activity Model ──────────────────────────────────────────────────────
+// Tracks every meaningful user action (submission, test run, etc.)
+// The composite index on (userId, createdAt) is the performance key for the
+// calendar aggregation query — without it, a full table scan runs on every load.
+const Activity = sequelize.define('Activity', {
+    id: {
+        type: DataTypes.UUID,
+        primaryKey: true,
+        defaultValue: DataTypes.UUIDV4
+    },
+    // Who did it — use your auth system's user identifier here
+    userId: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    // What kind of action: "submission", "test_run", "solved", etc.
+    type: {
+        type: DataTypes.STRING,
+        defaultValue: "submission"
+    },
+    // Optional FK back to the Submission that caused this activity
+    submissionId: {
+        type: DataTypes.UUID,
+        allowNull: true
+    },
+}, {
+    // The composite index — this is what makes the calendar query fast
+    // It lets Postgres do an index scan instead of a full table scan
+    indexes: [
+        {
+            name: "activity_userid_createdat_idx",
+            fields: ["userId", "createdAt"]
+        }
+    ]
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 sequelize.sync({ alter: true }).catch(err => {
-    // Ignore "column already exists" errors from concurrent container startup race
     if (err.original && err.original.code === '42701') {
         console.log('[DB] Tables already up to date.');
     } else {
@@ -50,4 +89,4 @@ sequelize.sync({ alter: true }).catch(err => {
     }
 });
 
-module.exports = { sequelize, Submission, ASTFingerprint, PlagiarismCheck };
+module.exports = { sequelize, Submission, ASTFingerprint, PlagiarismCheck, Activity };

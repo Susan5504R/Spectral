@@ -5,7 +5,16 @@ const { Submission } = require("./db");
 
 const app = express();
 app.use(express.json());
+app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(200);
+    next();
+});
 
+const activityRouter = require("./routes/activity");
+app.use("/activity", activityRouter);
 // Connect using environment variables for Docker networking
 const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1";
 const submissionQueue = new Queue("python-codes", {
