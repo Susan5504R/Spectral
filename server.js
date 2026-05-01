@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const { Queue } = require("bullmq");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
@@ -20,6 +21,7 @@ const graphClient = require('./graph/client');
 const { getOrGenerateHint } = require('./graph/hintEngine');
 
 const app = express();
+app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", credentials: true }));
 app.use(express.json());
 
 const REDIS_HOST = process.env.REDIS_HOST || "localhost";
