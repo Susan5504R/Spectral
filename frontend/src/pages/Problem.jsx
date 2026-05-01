@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Editor from "@monaco-editor/react";
-import { ArrowLeft, Play, Send, RotateCcw, Terminal, Code2, Info } from "lucide-react";
+import { ArrowLeft, Play, Send, RotateCcw, Terminal, Code2, Info, Workflow, X } from "lucide-react";
+import ASTGraphViewer from "../components/ASTGraphViewer";
 
 const BOILERPLATE = {
   cpp: "#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write code here\n    return 0;\n}",
@@ -18,7 +19,7 @@ export default function Problem() {
   const [language, setLanguage] = useState("cpp");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-
+  const [showGraph, setShowGraph] = useState(false);
   useEffect(() => {
     const fetchProblem = async () => {
       const token = localStorage.getItem("token");
@@ -54,7 +55,20 @@ export default function Problem() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(body)
       });
+      
+      if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem("token");
+          navigate("/login");
+          return;
+      }
+      
       const data = await res.json();
+      if (!res.ok) {
+          setResult({ error: data.error || "Failed to execute" });
+          setLoading(false);
+          return;
+      }
+      
       setResult({ status: "Queued", submissionId: data.submissionId });
       pollStatus(data.submissionId);
     } catch (err) {
@@ -109,6 +123,9 @@ export default function Problem() {
           </div>
           <button onClick={() => handleExecute("/run")} disabled={loading} className="flex items-center gap-2 bg-[#2a2a2a] hover:bg-[#333] px-4 py-1.5 rounded-lg text-xs font-medium border border-white/5 transition disabled:opacity-50">
             <Play size={14} className="fill-current" /> Run
+          </button>
+          <button onClick={() => setShowGraph(true)} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 px-4 py-1.5 rounded-lg text-xs font-semibold text-white shadow-lg shadow-purple-900/20 transition">
+            <Workflow size={14} /> View AST Graph
           </button>
           <button onClick={() => handleExecute("/submit")} disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-xs font-semibold text-white shadow-lg shadow-blue-900/20 transition disabled:opacity-50">
             <Send size={14} /> Submit
@@ -185,6 +202,25 @@ export default function Problem() {
           </div>
         </section>
       </main>
+
+      {/* Graph Modal Overlay */}
+      {showGraph && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="bg-slate-900 w-full h-full max-w-7xl max-h-[90vh] rounded-2xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden relative">
+                  <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
+                      <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                          <Workflow className="text-purple-500" /> Problem AST Evolution
+                      </h2>
+                      <button onClick={() => setShowGraph(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                          <X size={20} />
+                      </button>
+                  </div>
+                  <div className="flex-1 w-full h-full relative">
+                      <ASTGraphViewer problemId={id} />
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

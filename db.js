@@ -15,6 +15,25 @@ const sequelize = new Sequelize(
     }
 );
 
+async function initDb(options = {}) {
+    const {
+        alter = false,
+        force = false,
+        logPrefix = "DB"
+    } = options;
+    const schemaLockId = 424242;
+
+    await sequelize.authenticate();
+    await sequelize.query(`SELECT pg_advisory_lock(${schemaLockId});`);
+
+    try {
+        await sequelize.sync({ alter, force });
+        console.log(`[${logPrefix}] Database ready.`);
+    } finally {
+        await sequelize.query(`SELECT pg_advisory_unlock(${schemaLockId});`);
+    }
+}
+
 const User = sequelize.define("User", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
 
@@ -222,6 +241,7 @@ sequelize.sync({ alter: true })
 
 module.exports = {
     sequelize,
+    initDb,
     User,
     Problem,
     TestCase,
