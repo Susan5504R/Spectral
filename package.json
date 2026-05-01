@@ -20,6 +20,7 @@
     "nodemon": "^3.1.11",
     "pg": "^8.20.0",
     "pg-hstore": "^2.3.4",
+    "recharts": "^3.8.1",
     "sequelize": "^6.37.8",
     "tree-sitter-c": "^0.24.1",
     "tree-sitter-cpp": "^0.23.4",
