@@ -4,6 +4,7 @@ import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { useState, useEffect } from "react";
 import { ArrowLeft, User, Save, X, Settings, Star, BarChart3 } from "lucide-react";
+import ActivityCalendar from "../components/ActivityCalendar";
 
 // --- SUB-COMPONENT: EDIT PROFILE MODAL ---
 function EditProfileModal({ isOpen, onClose, currentData, onUpdateSuccess }) {
@@ -293,6 +294,19 @@ export default function Profile() {
             </div>
           </div>
         </div>
+
+        {/* 📅 ACTIVITY HEATMAP */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <ActivityCalendar
+            userId={user.id}
+            token={localStorage.getItem("token")}
+          />
+        </motion.div>
 
         {/* 📚 TABS SECTION */}
         <div className="bg-slate-800/40 rounded-2xl border border-slate-700 overflow-hidden min-h-[400px]">
