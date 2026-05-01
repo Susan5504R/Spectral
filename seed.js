@@ -1,9 +1,9 @@
-const { sequelize, Problem, TestCase, Topic } = require('./db');
+const { initDb, sequelize, Problem, TestCase, Topic } = require('./db');
 
 async function seed() {
     try {
         console.log("Seeding 20 Problems with Descriptions, Constraints, and Cases...");
-        await sequelize.sync();
+        await initDb({ logPrefix: "SEED" });
         await TestCase.destroy({ where: {}, truncate: { cascade: true } });
         await Problem.destroy({ where: {}, truncate: { cascade: true } });
         await Topic.destroy({ where: {}, truncate: { cascade: true } });

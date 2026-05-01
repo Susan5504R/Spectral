@@ -15,6 +15,25 @@ const sequelize = new Sequelize(
     }
 );
 
+async function initDb(options = {}) {
+    const {
+        alter = true,
+        force = false,
+        logPrefix = "DB"
+    } = options;
+    const schemaLockId = 424242;
+
+    await sequelize.authenticate();
+    await sequelize.query(`SELECT pg_advisory_lock(${schemaLockId});`);
+
+    try {
+        await sequelize.sync({ alter, force });
+        console.log(`[${logPrefix}] Database ready.`);
+    } finally {
+        await sequelize.query(`SELECT pg_advisory_unlock(${schemaLockId});`);
+    }
+}
+
 const User = sequelize.define("User", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
 
@@ -27,7 +46,7 @@ const User = sequelize.define("User", {
     email: {
         type: DataTypes.STRING,
         unique: true,
-        allowNull: false,
+        allowNull: true,
         validate: {
             isEmail: true
         }
@@ -166,9 +185,25 @@ const FavouriteProblem = sequelize.define("FavouriteProblem", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true }
 });
 
+// Composite index on (userId, createdAt) makes the calendar aggregation query fast —
+// Postgres does an index scan instead of a full table scan for each profile load.
+const Activity = sequelize.define('Activity', {
+    id:           { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    userId:       { type: DataTypes.UUID, allowNull: false },
+    type:         { type: DataTypes.STRING, defaultValue: "submission" },
+    submissionId: { type: DataTypes.UUID, allowNull: true },
+}, {
+    indexes: [
+        { name: "activity_userid_createdat_idx", fields: ["userId", "createdAt"] }
+    ]
+});
+
 // Relationships
 User.hasMany(Submission, { foreignKey: "userId" });
 Submission.belongsTo(User, { foreignKey: "userId" });
+
+User.hasMany(Activity, { foreignKey: "userId" });
+Activity.belongsTo(User, { foreignKey: "userId" });
 
 Problem.hasMany(TestCase, { foreignKey: "problemId" });
 TestCase.belongsTo(Problem, { foreignKey: "problemId" });
@@ -208,20 +243,9 @@ Problem.belongsToMany(User, { through: FavouriteProblem, as: "FavouritedByUsers"
 // UserProblem,
 // FavouriteProblem,
 // };
-sequelize.sync({ alter: true })
-    .then(() => {
-        console.log("[DB] Database synced successfully.");
-    })
-    .catch(err => {
-        if (err.original && err.original.code === "42701") {
-            console.log("[DB] Tables already up to date.");
-        } else {
-            console.error("[DB] Sync error:", err.message);
-        }
-    });
-
 module.exports = {
     sequelize,
+    initDb,
     User,
     Problem,
     TestCase,
@@ -234,4 +258,5 @@ module.exports = {
     Topic,
     UserProblem,
     FavouriteProblem,
+    Activity,
 };
