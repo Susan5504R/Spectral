@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const {
+    initDb,
     User,
     Submission,
     Problem,
@@ -604,6 +605,17 @@ app.get("/graph/stats", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`API Server ready at http://localhost:${PORT}`);
-});
+
+async function startServer() {
+    try {
+        await initDb({ logPrefix: "API" });
+        app.listen(PORT, () => {
+            console.log(`API Server ready at http://localhost:${PORT}`);
+        });
+    } catch (err) {
+        console.error("[API] Failed to start:", err.message);
+        process.exit(1);
+    }
+}
+
+startServer();

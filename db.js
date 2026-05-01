@@ -15,6 +15,25 @@ const sequelize = new Sequelize(
     }
 );
 
+async function initDb(options = {}) {
+    const {
+        alter = false,
+        force = false,
+        logPrefix = "DB"
+    } = options;
+    const schemaLockId = 424242;
+
+    await sequelize.authenticate();
+    await sequelize.query(`SELECT pg_advisory_lock(${schemaLockId});`);
+
+    try {
+        await sequelize.sync({ alter, force });
+        console.log(`[${logPrefix}] Database ready.`);
+    } finally {
+        await sequelize.query(`SELECT pg_advisory_unlock(${schemaLockId});`);
+    }
+}
+
 const User = sequelize.define("User", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     username: { type: DataTypes.STRING, unique: true, allowNull: false },
@@ -148,16 +167,9 @@ Problem.belongsToMany(User, { through: UserProblem, as: "SolvedByUsers" });
 User.belongsToMany(Problem, { through: FavouriteProblem, as: "FavouriteProblems" });
 Problem.belongsToMany(User, { through: FavouriteProblem, as: "FavouritedByUsers" });
 
-sequelize.sync().catch(err => {
-    if (err.original && err.original.code === '42701') {
-        console.log('[DB] Tables already up to date.');
-    } else {
-        console.error('[DB] Sync error:', err.message);
-    }
-});
-
 module.exports = {
     sequelize,
+    initDb,
     User,
     Problem,
     TestCase,

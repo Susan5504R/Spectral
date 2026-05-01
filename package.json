@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
+    "worker": "node worker.js",
+    "seed": "node seed.js",
+    "seed:problems": "node seedProblems.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:anticheat": "node anticheat/tests/test_logic_rapid.js",
     "graph:schema": "cross-env DB_HOST=127.0.0.1 DB_PORT=5433 node graph/schema.js",

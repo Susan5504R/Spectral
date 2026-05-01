@@ -17,7 +17,7 @@
 
 const { Worker }          = require('bullmq');
 const { Op }              = require('sequelize');
-const { Submission, TransformationLabel } = require('./db');
+const { initDb, Submission, TransformationLabel } = require('./db');
 
 const { getTokensAndHistogram, parseToTree } = require('./anticheat/astParser');
 const { diff }                               = require('./graph/treeDiff');
@@ -183,40 +183,46 @@ async function processEvolutionParams(submissionId) {
 
 // ─── Worker Initialization ────────────────────────────────────────────────────
 
-console.log('[Evolution Worker] Booting up...');
-graphClient.healthCheck()
-    .then(() => console.log('[Evolution Worker] AGE Client connected.'))
-    .catch(e => {
-        console.error('[Evolution Worker] Failed to init graph connection:', e.message);
-        process.exit(1);
+let worker;
+
+async function startEvolutionWorker() {
+    console.log('[Evolution Worker] Booting up...');
+    await initDb({ logPrefix: "EVOLUTION" });
+    await graphClient.healthCheck();
+    console.log('[Evolution Worker] AGE Client connected.');
+
+    worker = new Worker('evolution-graph', async (job) => {
+        const { submissionId } = job.data;
+        if (!submissionId) throw new Error('Missing submissionId');
+        
+        return await processEvolutionParams(submissionId);
+    }, {
+        connection: { host: REDIS_HOST, port: REDIS_PORT },
+        concurrency: 2 // Diffing/Trees is CPU intensive; keep concurrency low
     });
 
-const worker = new Worker('evolution-graph', async (job) => {
-    const { submissionId } = job.data;
-    if (!submissionId) throw new Error('Missing submissionId');
-    
-    return await processEvolutionParams(submissionId);
-}, {
-    connection: { host: REDIS_HOST, port: REDIS_PORT },
-    concurrency: 2 // Diffing/Trees is CPU intensive; keep concurrency low
-});
+    worker.on('ready', () => console.log('[Evolution Worker] Listening for jobs on "evolution-graph" queue.'));
+    worker.on('failed', (job, err) => console.error(`[Job ${job?.id}] Failed:`, err.message));
+    worker.on('error', (err) => console.error('[Evolution Worker] Error:', err));
+}
 
-worker.on('ready', () => console.log('[Evolution Worker] Listening for jobs on "evolution-graph" queue.'));
-worker.on('failed', (job, err) => console.error(`[Job ${job?.id}] Failed:`, err.message));
-worker.on('error', (err) => console.error('[Evolution Worker] Error:', err));
+startEvolutionWorker().catch(e => {
+    console.error('[Evolution Worker] Failed to start:', e.message);
+    process.exit(1);
+});
 
 module.exports = { processEvolutionParams };
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\n[Evolution Worker] Shutting down...');
-    await worker.close();
+    if (worker) await worker.close();
     await graphClient.pool.end();
     process.exit(0);
 });
 process.on('SIGTERM', async () => {
     console.log('\n[Evolution Worker] Terminating...');
-    await worker.close();
+    if (worker) await worker.close();
     await graphClient.pool.end();
     process.exit(0);
 });
