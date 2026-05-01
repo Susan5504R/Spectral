@@ -17,7 +17,7 @@ const sequelize = new Sequelize(
 
 async function initDb(options = {}) {
     const {
-        alter = false,
+        alter = true,
         force = false,
         logPrefix = "DB"
     } = options;
@@ -46,7 +46,7 @@ const User = sequelize.define("User", {
     email: {
         type: DataTypes.STRING,
         unique: true,
-        allowNull: false,
+        allowNull: true,
         validate: {
             isEmail: true
         }
@@ -243,18 +243,6 @@ Problem.belongsToMany(User, { through: FavouriteProblem, as: "FavouritedByUsers"
 // UserProblem,
 // FavouriteProblem,
 // };
-sequelize.sync({ alter: true })
-    .then(() => {
-        console.log("[DB] Database synced successfully.");
-    })
-    .catch(err => {
-        if (err.original && err.original.code === "42701") {
-            console.log("[DB] Tables already up to date.");
-        } else {
-            console.error("[DB] Sync error:", err.message);
-        }
-    });
-
 module.exports = {
     sequelize,
     initDb,
@@ -270,4 +258,5 @@ module.exports = {
     Topic,
     UserProblem,
     FavouriteProblem,
+    Activity,
 };

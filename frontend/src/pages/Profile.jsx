@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { useState, useEffect } from "react";
-import { ArrowLeft, User, Save, X, Settings, Star, BarChart3 } from "lucide-react";
+import { ArrowLeft, User, Save, X, Settings, Star, BarChart3, GitBranch } from "lucide-react";
 import ActivityCalendar from "../components/ActivityCalendar";
 
 // --- SUB-COMPONENT: EDIT PROFILE MODAL ---
@@ -224,13 +224,22 @@ export default function Profile() {
             </div>
           </div>
 
-          <button
-            onClick={() => setIsEditModalOpen(true)}
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-5 py-2.5 rounded-xl border border-slate-600 transition-all active:scale-95"
-          >
-            <User size={18} />
-            Edit Profile
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate("/graph")}
+              className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-4 py-2.5 rounded-xl border border-slate-600 transition-all active:scale-95 text-purple-400"
+            >
+              <GitBranch size={18} />
+              Graph
+            </button>
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-5 py-2.5 rounded-xl border border-slate-600 transition-all active:scale-95"
+            >
+              <User size={18} />
+              Edit Profile
+            </button>
+          </div>
         </motion.div>
 
         {/* 📊 STATS SECTION */}
@@ -363,7 +372,7 @@ export default function Profile() {
                       {favorites.map((prob) => (
                         <div 
                           key={prob.id} 
-                          onClick={() => navigate(`/problems/${prob.id}`)}
+                          onClick={() => navigate(`/problem/${prob.id}`)}
                           className="group flex justify-between items-center bg-slate-900/50 px-6 py-4 rounded-xl border border-slate-700 hover:border-blue-500 hover:bg-slate-800 transition-all cursor-pointer shadow-lg"
                         >
                           <span className="font-medium group-hover:text-blue-400 transition-colors">{prob.title}</span>

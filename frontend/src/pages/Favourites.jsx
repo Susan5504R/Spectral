@@ -96,7 +96,7 @@ export default function Favourites() {
                   </div>
                   
                   <button 
-                    onClick={() => navigate(`/problems/${prob.id}`)}
+                    onClick={() => navigate(`/problem/${prob.id}`)}
                     className="bg-[#21262d] border border-[#363b42] hover:bg-[#30363d] text-[#c9d1d9] px-4 py-2 rounded-md text-sm font-semibold transition-colors w-full md:w-auto"
                   >
                     Solve Again

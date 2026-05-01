@@ -1,6 +1,6 @@
 const { Worker, Queue } = require("bullmq");
 const fs = require("fs");
-const { initDb, Submission, ExecutionMetrics, TestCase, UserProblem } = require("./db");
+const { initDb, Submission, ExecutionMetrics, TestCase, UserProblem, Activity } = require("./db");
 const { storeFingerprint } = require("./anticheat/store");
 
 const { executeCpp } = require("./executors/executeCpp");
@@ -170,6 +170,12 @@ async function startWorker() {
                     execution_time_ms: totalTime,
                     memory_used_mb: peakMemory
                 });
+
+                if (userId) {
+                    Activity.create({ userId, type: 'submission', submissionId })
+                        .catch(e => console.error(`[JOB ${job.id}] Activity log error:`, e.message));
+                }
+
                 if (userId && problemId) {
                     if (status === "Accepted") {
                         await UserProblem.upsert({

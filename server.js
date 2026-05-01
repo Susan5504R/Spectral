@@ -220,7 +220,7 @@ app.get("/problems/:id/submissions", authenticateToken, async (req, res) => {
                 problemId: req.params.id,
                 userId: req.user.id
             },
-            include: [{ model: ExecutionMetrics, attributes: ["execution_time_ms", "memory_usage_mb"] }],
+            include: [{ model: ExecutionMetrics, attributes: ["execution_time_ms", "memory_used_mb"] }],
             order: [["createdAt", "DESC"]]
         });
         res.json(submissions);
@@ -309,7 +309,7 @@ app.get("/me/favourites", authenticateToken, async (req, res) => {
 app.get("/me/profile", authenticateToken, async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id, {
-            attributes: ["id", "username", "createdAt"]
+            attributes: ["id", "username", "bio", "avatarUrl", "createdAt"]
         });
 
         const solvedRows = await UserProblem.findAll({
