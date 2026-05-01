@@ -21,7 +21,7 @@ const executeC = (filepath, inputPath) => {
         innerCmd = `${innerCmd}; RET=$?; echo "METRICS_MEM $(cat /sys/fs/cgroup/memory.peak 2>/dev/null || echo 0)" >&2; exit $RET`;
 
         const args = [
-            "run", "--rm", "--network=none",
+            "run", "--rm", "--pull=never", "--network=none",
             "--memory=128m", "--cpus=0.5",
             ...volumes, DOCKER_IMAGE, "sh", "-c", innerCmd
         ];
@@ -37,7 +37,7 @@ const executeC = (filepath, inputPath) => {
             const err = new Error("TLE (Time Limit Exceeded)");
             err.type = "Time Limit Exceeded";
             reject(err);
-        }, 10000);
+        }, 15000);
 
         const handleData = (data, isErr) => {
             if (killed) return;
