@@ -6,9 +6,9 @@ import api from "../api/axiosInstance";
 export default function Login() {
   const navigate = useNavigate();
 
-  // Changed 'email' to 'username' to match backend model
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,77 +22,62 @@ export default function Login() {
       localStorage.setItem("token", data.token);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.error || err.message || "Login failed");
+      setError(err.response?.data?.error || "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center relative overflow-hidden">
-      {/* Background Glow */}
-      <div className="absolute w-[400px] h-[400px] bg-blue-600 opacity-20 blur-3xl rounded-full"></div>
+    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+      <motion.div className="bg-slate-800 p-8 rounded-xl w-full max-w-md">
+        <h2 className="text-2xl mb-6 text-center">Login</h2>
 
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="z-10 bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-slate-700 w-full max-w-md shadow-lg"
-      >
-        <h2 className="text-3xl font-bold mb-6 text-center">Welcome Back 👋</h2>
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-500 p-3 rounded-md mb-4 text-sm text-center">
-            {error}
-          </div>
-        )}
+        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          {/* Username Input */}
           <input
             type="text"
             placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+            className="p-2 bg-slate-900 border border-slate-600 rounded"
           />
 
-          {/* Password Input */}
           <input
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+            className="p-2 bg-slate-900 border border-slate-600 rounded"
           />
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          {/* 🔥 NEW: Forgot Password */}
+          <div className="text-right text-sm">
+            <span
+              onClick={() => navigate("/forgot-password")}
+              className="text-blue-400 cursor-pointer hover:underline"
+            >
+              Forgot Password?
+            </span>
+          </div>
+
+          <button
             type="submit"
             disabled={loading}
-            className={`bg-blue-600 py-2 rounded-md font-semibold mt-2 shadow-md shadow-blue-500/30 transition-all ${
-              loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
-            }`}
+            className="bg-blue-600 py-2 rounded"
           >
             {loading ? "Logging in..." : "Login"}
-          </motion.button>
+          </button>
         </form>
 
-        <div className="flex items-center gap-2 my-6">
-          <div className="flex-1 h-[1px] bg-slate-600"></div>
-          <span className="text-slate-400 text-sm">OR</span>
-          <div className="flex-1 h-[1px] bg-slate-600"></div>
-        </div>
-
-        <p className="text-center text-slate-400 text-sm">
+        <p className="text-center text-sm mt-4">
           Don’t have an account?{" "}
           <span
             onClick={() => navigate("/signup")}
-            className="text-blue-500 cursor-pointer hover:underline"
+            className="text-blue-400 cursor-pointer"
           >
             Sign Up
           </span>

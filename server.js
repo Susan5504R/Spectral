@@ -1,5 +1,12 @@
+require("dotenv").config();
+
+console.log("EMAIL_USER:", process.env.EMAIL_USER);
+console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "LOADED" : "NOT LOADED");
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
+const { Op } = require("sequelize");
 const { Queue } = require("bullmq");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
@@ -16,6 +23,7 @@ const {
     ExecutionMetrics
 } = require("./db");
 // const { User, Submission, Problem, TestCase, PlagiarismCheck } = require("./db");
+console.log("🔥 NEW SERVER WITH FORGOT PASSWORD ROUTE LOADED");
 const { authenticateToken, SECRET } = require("./auth");
 const graphClient = require('./graph/client');
 const { getOrGenerateHint } = require('./graph/hintEngine');
@@ -23,7 +31,51 @@ const { getOrGenerateHint } = require('./graph/hintEngine');
 const app = express();
 app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", credentials: true }));
 app.use(express.json());
+app.get("/test", (req, res) => {
+    res.json({ message: "server is correct" });
+});
+app.post("/forgot-password", async (req, res) => {
+    try {
+        const { email } = req.body;
 
+        console.log("Forgot password email:", email); // debug
+
+        const user = await User.findOne({ where: { email } });
+
+        if (!user) {
+            return res.status(404).json({ error: "No user found with this email" });
+        }
+
+        const token = crypto.randomBytes(32).toString("hex");
+
+        user.resetToken = token;
+        user.resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000);
+        await user.save();
+
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            }
+        });
+
+        const resetLink = `http://localhost:5173/reset-password/${token}`;
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Reset Password",
+            html: `<p>Click to reset password:</p><a href="${resetLink}">${resetLink}</a>`
+        });
+
+        res.json({ message: "Reset email sent" });
+
+    } catch (err) {
+        console.error("FORGOT PASSWORD ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
 const REDIS_HOST = process.env.REDIS_HOST || "localhost";
 const REDIS_PORT = Number(process.env.REDIS_PORT || 6379);
 
@@ -353,20 +405,23 @@ app.get("/status/:id", authenticateToken, async (req, res) => {
 // });
 app.post("/register", async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, email, password } = req.body;
 
-        console.log("Register body:", req.body);
-
-        const existingUser = await User.findOne({ where: { username } });
+        const existingUser = await User.findOne({
+            where: {
+                [Op.or]: [{ username }, { email }]
+            }
+        });
 
         if (existingUser) {
-            return res.status(400).json({ error: "Username already exists" });
+            return res.status(400).json({ error: "Username or Email already exists" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = await User.create({
             username,
+            email,
             password: hashedPassword
         });
 
@@ -376,10 +431,69 @@ app.post("/register", async (req, res) => {
         });
 
     } catch (err) {
-        console.error("REGISTER ERROR:", err);
         res.status(500).json({ error: err.message });
     }
 });
+
+
+app.post("/reset-password/:token", async (req, res) => {
+    try {
+        const { token } = req.params;
+        const { newPassword } = req.body;
+
+        const user = await User.findOne({
+            where: {
+                resetToken: token,
+                resetTokenExpiry: {
+                    [Op.gt]: new Date()
+                }
+            }
+        });
+
+        if (!user) return res.status(400).json({ error: "Invalid or expired token" });
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        user.resetToken = null;
+        user.resetTokenExpiry = null;
+
+        await user.save();
+
+        res.json({ message: "Password reset successful" });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// app.post("/register", async (req, res) => {
+//     try {
+//         const { username, password } = req.body;
+
+//         console.log("Register body:", req.body);
+
+//         const existingUser = await User.findOne({ where: { username } });
+
+//         if (existingUser) {
+//             return res.status(400).json({ error: "Username already exists" });
+//         }
+
+//         const hashedPassword = await bcrypt.hash(password, 10);
+
+//         const user = await User.create({
+//             username,
+//             password: hashedPassword
+//         });
+
+//         res.status(201).json({
+//             message: "User created",
+//             userId: user.id
+//         });
+
+//     } catch (err) {
+//         console.error("REGISTER ERROR:", err);
+//         res.status(500).json({ error: err.message });
+//     }
+// });
 
 app.post("/login", async (req, res) => {
     const { username, password } = req.body;
@@ -391,6 +505,8 @@ app.post("/login", async (req, res) => {
         res.status(401).json({ error: "Invalid credentials" });
     }
 });
+
+
 
 app.post("/submit", authenticateToken, async (req, res) => {
     try {

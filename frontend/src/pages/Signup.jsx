@@ -6,10 +6,11 @@ import api from "../api/axiosInstance";
 export default function Signup() {
   const navigate = useNavigate();
 
-  // Aligned with backend requirements (username/password)
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState(""); // ✅ added
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +18,6 @@ export default function Signup() {
     e.preventDefault();
     setError("");
 
-    // Client-side validation
     if (password !== confirmPassword) {
       setError("Passwords do not match!");
       return;
@@ -26,7 +26,12 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      await api.post("/register", { username, password });
+      await api.post("/register", {
+        username,
+        email, // ✅ added
+        password
+      });
+
       alert("Account created successfully!");
       navigate("/login");
     } catch (err) {
@@ -37,26 +42,18 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center relative overflow-hidden">
-      {/* Background Glow */}
-      <div className="absolute w-[450px] h-[450px] bg-blue-600 opacity-20 blur-3xl rounded-full"></div>
+    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+      <motion.div className="bg-slate-800 p-8 rounded-xl w-full max-w-md">
+        <h2 className="text-3xl mb-6 text-center">Create Account 🚀</h2>
 
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="z-10 bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-slate-700 w-full max-w-md shadow-lg"
-      >
-        <h2 className="text-3xl font-bold mb-6 text-center">Create Account 🚀</h2>
-
-        {/* Error Message Display */}
         {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-500 p-3 rounded-md mb-4 text-sm text-center">
+          <div className="text-red-500 text-sm mb-4 text-center">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSignup} className="flex flex-col gap-4">
+
           {/* Username */}
           <input
             type="text"
@@ -64,7 +61,17 @@ export default function Signup() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+            className="p-2 bg-slate-900 border border-slate-600 rounded"
+          />
+
+          {/* 🔥 Email */}
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="p-2 bg-slate-900 border border-slate-600 rounded"
           />
 
           {/* Password */}
@@ -74,7 +81,7 @@ export default function Signup() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+            className="p-2 bg-slate-900 border border-slate-600 rounded"
           />
 
           {/* Confirm Password */}
@@ -84,33 +91,23 @@ export default function Signup() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+            className="p-2 bg-slate-900 border border-slate-600 rounded"
           />
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <button
             type="submit"
             disabled={loading}
-            className={`bg-blue-600 py-2 rounded-md font-semibold mt-2 shadow-md shadow-blue-500/30 transition-all ${
-                loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
-            }`}
+            className="bg-blue-600 py-2 rounded"
           >
-            {loading ? "Creating Account..." : "Sign Up"}
-          </motion.button>
+            {loading ? "Creating..." : "Sign Up"}
+          </button>
         </form>
 
-        <div className="flex items-center gap-2 my-6">
-          <div className="flex-1 h-[1px] bg-slate-600"></div>
-          <span className="text-slate-400 text-sm">OR</span>
-          <div className="flex-1 h-[1px] bg-slate-600"></div>
-        </div>
-
-        <p className="text-center text-slate-400 text-sm">
+        <p className="text-center text-sm mt-4">
           Already have an account?{" "}
           <span
             onClick={() => navigate("/login")}
-            className="text-blue-500 cursor-pointer hover:underline"
+            className="text-blue-400 cursor-pointer"
           >
             Login
           </span>
