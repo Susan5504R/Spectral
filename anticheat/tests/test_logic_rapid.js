@@ -37,13 +37,12 @@ async function main() {
     // 1. Identical Code
     await runTest("Identical Code", `
     int main() {
-        int a = 15, b = 9;
-        return b + a;
+        int a = 5, b = 10;
+        return a + b;
     }`, `
     int main() {
         int a = 5, b = 10;
-        int c = 10;
-        return a + b + 2 * c;
+        return a + b;
     }`, "cpp");
 
     // 2. Renamed Variables

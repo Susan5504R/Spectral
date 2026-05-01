@@ -1,34 +1,49 @@
 version: '3.8'
 
 services:
+  # ── Postgres + Apache AGE ─────────────────────────────────────────────────
+  # Uses a custom image built from Dockerfile.postgres which extends
+  # apache/age:PG16_latest (AGE pre-compiled for PostgreSQL 16).
+  # The init/ directory is mounted into /docker-entrypoint-initdb.d so
+  # 01_age.sql runs automatically on first-time DB creation.
+  #
+  # ⚠️  IMPORTANT — if you were running the old postgres:latest image:
+  #     docker-compose down -v   ← destroys the old pgdata volume
+  #     docker-compose up --build
+  #   A PG16 data dir is incompatible with a PG17 data dir.
   db:
-    image: postgres:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     container_name: spectral-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_DB:       ${POSTGRES_DB}
+      PGDATA:            /var/lib/postgresql/data/pgdata
     volumes:
+      - ./init:/docker-entrypoint-initdb.d   # AGE init SQL (runs on first boot)
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:alpine
     container_name: spectral-redis
     ports:
       - "6379:6379"
 
+  # ── API Server ────────────────────────────────────────────────────────────
   api:
     build: .
     container_name: spectral-api
-    command: node server.js # 👈 CHANGED THIS TO NODE
+    command: node server.js
     ports:
       - "${PORT}:${PORT}"
     environment:
@@ -43,10 +58,11 @@ services:
       redis:
         condition: service_started
 
+  # ── Code Execution Worker ─────────────────────────────────────────────────
   worker:
     build: .
     container_name: spectral-worker
-    command: node worker.js # 👈 CHANGED THIS TO NODE
+    command: node worker.js
     environment:
       - DB_HOST=${DB_HOST}
       - REDIS_HOST=${REDIS_HOST}
@@ -56,7 +72,7 @@ services:
       - HOST_PWD=${PWD}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - .:/usr/src/app      
+      - .:/usr/src/app
       - /usr/src/app/node_modules
     depends_on:
       db:
@@ -64,6 +80,7 @@ services:
       redis:
         condition: service_started
 
+  # ── Anti-Cheat Worker ─────────────────────────────────────────────────────
   anticheat-worker:
     build: .
     container_name: spectral-anticheat
@@ -81,5 +98,25 @@ services:
       redis:
         condition: service_started
 
+  # ── Evolution Worker (Phase 4 — skeleton ready, activated in Phase 4) ─────
+  # Uncomment this block when evolutionWorker.js is created in Phase 4.
+  #
+  evolution-worker:
+    build: .
+    container_name: spectral-evolution
+    command: node evolution_worker.js
+    environment:
+      - DB_HOST=${DB_HOST}
+      - REDIS_HOST=${REDIS_HOST}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
 volumes:
-  pgdata:
+  pgdata:

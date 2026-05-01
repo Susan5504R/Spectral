@@ -5,78 +5,104 @@ import { useState } from "react";
 export default function Login() {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
+  // Changed 'email' to 'username' to match backend model
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    // TODO: connect backend later
-    console.log("Login:", email, password);
+    try {
+      const response = await fetch("http://localhost:5000/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
 
-    navigate("/problems"); // temp redirect
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      // Store the JWT token in localStorage
+      localStorage.setItem("token", data.token);
+
+      // Redirect to the problems page
+      navigate("/");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center relative overflow-hidden">
-
       {/* Background Glow */}
       <div className="absolute w-[400px] h-[400px] bg-blue-600 opacity-20 blur-3xl rounded-full"></div>
 
-      {/* Login Card */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-slate-700 w-full max-w-md shadow-lg"
+        className="z-10 bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-slate-700 w-full max-w-md shadow-lg"
       >
-        {/* Title */}
-        <h2 className="text-3xl font-bold mb-6 text-center">
-          Welcome Back 👋
-        </h2>
+        <h2 className="text-3xl font-bold mb-6 text-center">Welcome Back 👋</h2>
 
-        {/* Form */}
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-500/20 border border-red-500 text-red-500 p-3 rounded-md mb-4 text-sm text-center">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
-
-          {/* Email */}
+          {/* Username Input */}
           <input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
-            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500"
+            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
           />
 
-          {/* Password */}
+          {/* Password Input */}
           <input
             type="password"
-            placeholder="Enter your password"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500"
+            className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
           />
 
-          {/* Login Button */}
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             type="submit"
-            className="bg-blue-600 py-2 rounded-md font-semibold hover:bg-blue-700 mt-2 shadow-md shadow-blue-500/30"
+            disabled={loading}
+            className={`bg-blue-600 py-2 rounded-md font-semibold mt-2 shadow-md shadow-blue-500/30 transition-all ${
+              loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
+            }`}
           >
-            Login
+            {loading ? "Logging in..." : "Login"}
           </motion.button>
         </form>
 
-        {/* Divider */}
         <div className="flex items-center gap-2 my-6">
           <div className="flex-1 h-[1px] bg-slate-600"></div>
           <span className="text-slate-400 text-sm">OR</span>
           <div className="flex-1 h-[1px] bg-slate-600"></div>
         </div>
 
-        {/* Signup Redirect */}
         <p className="text-center text-slate-400 text-sm">
           Don’t have an account?{" "}
           <span

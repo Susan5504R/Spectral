@@ -1,175 +1,186 @@
-import { useParams } from "react-router-dom";
-import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import Editor from "@monaco-editor/react";
+import { ArrowLeft, Play, Send, RotateCcw, Terminal, Code2, Info } from "lucide-react";
 
-const problemData = {
-  id: 1,
-  title: "Two Sum",
-  difficulty: "Easy",
-  description:
-    "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
-  constraints: ["2 ≤ nums.length ≤ 10^4", "-10^9 ≤ nums[i] ≤ 10^9"],
-  testcases: [
-    { input: "[2,7,11,15], target=9", output: "[0,1]" },
-    { input: "[3,2,4], target=6", output: "[1,2]" },
-  ],
+const BOILERPLATE = {
+  cpp: "#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write code here\n    return 0;\n}",
+  python: "def solution():\n    # Write code here\n    pass\n\nif __name__ == '__main__':\n    solution()",
+  javascript: "// Write code here\nfunction main() {\n    console.log('Hello World');\n}\nmain();",
+  java: "public class Main {\n    public static void main(String[] args) {\n        // Write code here\n    }\n}"
 };
 
 export default function Problem() {
   const { id } = useParams();
-
-  const [code, setCode] = useState("// Write your solution here");
-  const [language, setLanguage] = useState("javascript");
+  const navigate = useNavigate();
+  const [problem, setProblem] = useState(null);
+  const [code, setCode] = useState("");
+  const [language, setLanguage] = useState("cpp");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const runCode = () => {
-    setLoading(true);
+  useEffect(() => {
+    const fetchProblem = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch(`http://localhost:5000/problems/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        setProblem(data);
+        setCode(BOILERPLATE["cpp"]); // Default
+      } catch (err) { console.error("Fetch error:", err); }
+    };
+    fetchProblem();
+  }, [id]);
 
-    setTimeout(() => {
-      setResult({
-        type: "run",
-        passed: 2,
-        total: 2,
-        time: "0.12s",
-        details: [
-          { status: "Passed" },
-          { status: "Passed" },
-        ],
-      });
-      setLoading(false);
-    }, 1000);
+  const handleLanguageChange = (newLang) => {
+    setLanguage(newLang);
+    setCode(BOILERPLATE[newLang]);
   };
 
-  const submitCode = () => {
+  const handleExecute = async (endpoint) => {
     setLoading(true);
-
-    setTimeout(() => {
-      setResult({
-        type: "submit",
-        passed: 8,
-        total: 10,
-        time: "0.35s",
-        details: Array(10)
-          .fill(0)
-          .map((_, i) => ({
-            status: i < 8 ? "Passed" : "Failed",
-          })),
-      });
-      setLoading(false);
-    }, 1500);
-  };
-
-  const resetCode = () => {
-    setCode("// Write your solution here");
     setResult(null);
+    const token = localStorage.getItem("token");
+    
+    try {
+      const res = await fetch(`http://localhost:5000${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code, language, problemId: id })
+      });
+      const data = await res.json();
+      setResult({ status: "Queued", submissionId: data.submissionId });
+      pollStatus(data.submissionId);
+    } catch (err) {
+      setResult({ error: "Failed to connect to server" });
+      setLoading(false);
+    }
   };
+
+  const pollStatus = async (subId) => {
+    const token = localStorage.getItem("token");
+    const interval = setInterval(async () => {
+      const res = await fetch(`http://localhost:5000/status/${subId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status !== "Pending") {
+        setResult(data);
+        setLoading(false);
+        clearInterval(interval);
+      }
+    }, 2000);
+  };
+
+  if (!problem) return <div className="h-screen bg-[#0a0a0a] flex items-center justify-center text-blue-500 animate-pulse">Loading Environment...</div>;
 
   return (
-    <div className="h-screen bg-slate-900 text-white flex">
-
-      {/* LEFT: Problem Description */}
-      <div className="w-1/2 border-r border-slate-700 p-6 overflow-auto">
-        <h1 className="text-xl font-semibold mb-2">
-          {problemData.title}
-        </h1>
-
-        <p className="text-slate-400 mb-4">
-          {problemData.description}
-        </p>
-
-        <h2 className="font-semibold mt-4 mb-2">Constraints:</h2>
-        <ul className="text-sm text-slate-400 list-disc pl-5">
-          {problemData.constraints.map((c, i) => (
-            <li key={i}>{c}</li>
-          ))}
-        </ul>
-
-        <h2 className="font-semibold mt-4 mb-2">Test Cases:</h2>
-        {problemData.testcases.map((tc, i) => (
-          <div key={i} className="bg-slate-800 p-3 rounded mb-2 text-sm">
-            <div>Input: {tc.input}</div>
-            <div>Output: {tc.output}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* RIGHT: Editor */}
-      <div className="w-1/2 flex flex-col">
-
-        {/* Controls */}
-        <div className="flex justify-between items-center p-3 border-b border-slate-700">
-          
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="bg-slate-800 px-2 py-1 rounded"
-          >
-            <option value="javascript">JavaScript</option>
-            <option value="python">Python</option>
-            <option value="cpp">C++</option>
-          </select>
-
-          <div className="flex gap-2">
-            <button onClick={runCode} className="bg-blue-600 px-3 py-1 rounded">
-              Run
-            </button>
-
-            <button onClick={submitCode} className="bg-green-600 px-3 py-1 rounded">
-              Submit
-            </button>
-
-            <button onClick={resetCode} className="bg-red-600 px-3 py-1 rounded">
-              Reset
-            </button>
-          </div>
+    <div className="h-screen bg-[#0a0a0a] text-slate-200 flex flex-col font-sans">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-2 bg-[#1a1a1a] border-b border-white/5">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/5 rounded-lg transition text-slate-400 hover:text-white">
+            <ArrowLeft size={18} />
+          </button>
+          <div className="h-4 w-[1px] bg-white/10" />
+          <h1 className="font-semibold text-sm tracking-tight">{problem.title}</h1>
+          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+            problem.difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+          }`}>{problem.difficulty}</span>
         </div>
-
-        {/* Editor */}
-        <div className="flex-1">
-          <Editor
-            height="100%"
-            language={language}
-            value={code}
-            onChange={(value) => setCode(value || "")}
-            theme="vs-dark"
-          />
+        
+        <div className="flex items-center gap-3">
+          <div className="flex bg-[#2a2a2a] p-1 rounded-lg border border-white/5">
+            {['cpp', 'python', 'javascript', 'java'].map((lang) => (
+              <button
+                key={lang}
+                onClick={() => handleLanguageChange(lang)}
+                className={`px-3 py-1 text-xs rounded-md capitalize transition ${language === lang ? 'bg-[#3a3a3a] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                {lang === 'cpp' ? 'C++' : lang}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => handleExecute("/run")} disabled={loading} className="flex items-center gap-2 bg-[#2a2a2a] hover:bg-[#333] px-4 py-1.5 rounded-lg text-xs font-medium border border-white/5 transition disabled:opacity-50">
+            <Play size={14} className="fill-current" /> Run
+          </button>
+          <button onClick={() => handleExecute("/submit")} disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-lg text-xs font-semibold text-white shadow-lg shadow-blue-900/20 transition disabled:opacity-50">
+            <Send size={14} /> Submit
+          </button>
         </div>
+      </header>
 
-        {/* Results */}
-        <div className="h-48 border-t border-slate-700 p-3 overflow-auto bg-black">
-          
-          {loading && <p className="text-blue-400">Running...</p>}
+      <main className="flex-1 flex overflow-hidden p-2 gap-2">
+        {/* Left Panel: Description */}
+        <section className="w-1/3 flex flex-col bg-[#141414] rounded-xl border border-white/5 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+            <Info size={16} className="text-blue-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Description</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+            <h2 className="text-xl font-bold mb-4">{problem.title}</h2>
+            <p className="text-slate-400 leading-relaxed text-sm whitespace-pre-line">{problem.description}</p>
+          </div>
+        </section>
 
-          {result && (
-            <div>
-              <p className="mb-2">
-                Passed {result.passed}/{result.total} test cases
-              </p>
-              <p className="text-sm text-slate-400 mb-2">
-                Execution Time: {result.time}
-              </p>
+        {/* Right Panel: Editor & Console */}
+        <section className="flex-1 flex flex-col gap-2">
+          <div className="flex-1 bg-[#141414] rounded-xl border border-white/5 overflow-hidden relative">
+             <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-white/[0.02]">
+                <Code2 size={16} className="text-purple-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Editor</span>
+             </div>
+             <Editor
+                theme="vs-dark"
+                language={language === 'cpp' ? 'cpp' : language === 'python' ? 'python' : 'javascript'}
+                value={code}
+                onChange={(val) => setCode(val)}
+                options={{ 
+                  minimap: { enabled: false }, 
+                  fontSize: 14,
+                  padding: { top: 20 },
+                  background: '#141414',
+                  lineNumbersMinChars: 3,
+                  smoothScrolling: true,
+                  cursorSmoothCaretAnimation: "on"
+                }}
+              />
+          </div>
 
-              <div className="grid grid-cols-5 gap-2">
-                {result.details.map((d, i) => (
-                  <div
-                    key={i}
-                    className={`text-xs px-2 py-1 rounded ${
-                      d.status === "Passed"
-                        ? "bg-green-600"
-                        : "bg-red-600"
-                    }`}
-                  >
-                    {d.status}
-                  </div>
-                ))}
+          <div className="h-1/3 bg-[#141414] rounded-xl border border-white/5 overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-white/[0.02]">
+              <div className="flex items-center gap-2">
+                <Terminal size={16} className="text-emerald-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Console Output</span>
               </div>
+              <button onClick={() => setResult(null)} className="p-1 hover:bg-white/5 rounded transition text-slate-500"><RotateCcw size={14}/></button>
             </div>
-          )}
-
-        </div>
-
-      </div>
+            
+            <div className="flex-1 p-4 font-mono text-sm overflow-y-auto bg-[#0d0d0d]">
+              {loading && <div className="text-blue-400 flex items-center gap-2"><span className="w-2 h-2 bg-blue-500 rounded-full animate-ping" /> Waiting for sandbox...</div>}
+              
+              {result && (
+                <div className="space-y-3">
+                  <div className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase ${result.status === 'Accepted' || result.status === 'Solved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                    {result.status}
+                  </div>
+                  {result.output && (
+                    <div className="space-y-1">
+                      <span className="text-xs text-slate-500 uppercase">Output:</span>
+                      <pre className="text-slate-300 bg-white/[0.03] p-3 rounded-lg border border-white/5">{result.output}</pre>
+                    </div>
+                  )}
+                  {result.error && (
+                    <pre className="text-rose-400 bg-rose-500/5 p-3 rounded-lg border border-rose-500/20">{result.error}</pre>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

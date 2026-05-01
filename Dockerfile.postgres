@@ -1,0 +1,26 @@
+# ============================================================
+# Dockerfile.postgres — Apache AGE on PostgreSQL 16
+# ============================================================
+#
+# Uses the official Apache AGE image (PG16) which ships with
+# AGE pre-compiled and installed — no build-from-source needed.
+#
+# The official image already sets shared_preload_libraries='age'
+# in postgresql.conf.sample.  We only add our init scripts here.
+# The actual extension CREATE + graph setup is in init/01_age.sql
+# which Postgres runs automatically on first-time DB initialization.
+# ============================================================
+
+FROM apache/age:release_PG16_1.6.0
+
+# Ensure shared_preload_libraries is correct in the sample config
+# (defensive — the official image already sets this, but we pin it)
+RUN echo "shared_preload_libraries = 'age'" > /tmp/age_preload.conf \
+    && grep -qxF "shared_preload_libraries = 'age'" /usr/share/postgresql/postgresql.conf.sample \
+       || cat /tmp/age_preload.conf >> /usr/share/postgresql/postgresql.conf.sample \
+    && rm /tmp/age_preload.conf
+
+# Copy init scripts into the Postgres entrypoint init directory.
+# These run in alphabetical order on first DB creation (empty PGDATA).
+# 01_age.sql  — enables AGE extension and creates spectral_graph
+COPY init/ /docker-entrypoint-initdb.d/

@@ -5,8 +5,8 @@ const { cosineSim, jaccard, getFingerprints } = require("./anticheat/winnow");
 const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1";
 
 const anticheatWorker = new Worker("anticheat", async (job) => {
-    const { submissionId, problemId, language } = job.data;
-    console.log(`[ANTICHEAT] Checking submission ${submissionId}`);
+    const { submissionId, problemId, language, userId } = job.data;
+    console.log(`[ANTICHEAT] Checking submission ${submissionId} (User: ${userId})`);
 
     const newFingerprintRecord = await ASTFingerprint.findOne({ where: { submissionId } });
     if (!newFingerprintRecord) {
@@ -18,13 +18,16 @@ const anticheatWorker = new Worker("anticheat", async (job) => {
     const newHist = newFingerprintRecord.histogram;
     const newFpSet = getFingerprints(newTokens);
 
+    const { Op } = require("sequelize");
     const priorFingerprints = await ASTFingerprint.findAll({
-        where: { language, problemId } 
+        where: { 
+            language, 
+            problemId,
+            userId: { [Op.ne]: userId } // Ignore self-submissions
+        } 
     });
 
     for (const prior of priorFingerprints) {
-        if (prior.submissionId === submissionId) continue; 
-
         // 1. Cosine Pre-filter
         const priorHist = prior.histogram;
         const cScore = cosineSim(newHist, priorHist);
@@ -43,15 +46,25 @@ const anticheatWorker = new Worker("anticheat", async (job) => {
             let verdict = "pending_ai";
             if (jScore >= 0.8) verdict = "flagged";
 
-            const check = await PlagiarismCheck.create({
-                sub1Id: submissionId,
-                sub2Id: prior.submissionId,
-                problemId: problemId || "unknown",
-                language: language,
-                cosineScore: cScore,
-                jaccardScore: jScore,
-                verdict: verdict
+            // Enforce stable ordering to prevent duplicate reciprocal entries
+            const s1Id = submissionId < prior.submissionId ? submissionId : prior.submissionId;
+            const s2Id = submissionId < prior.submissionId ? prior.submissionId : submissionId;
+
+            const [check, created] = await PlagiarismCheck.findOrCreate({
+                where: { sub1Id: s1Id, sub2Id: s2Id },
+                defaults: {
+                    problemId: problemId || "unknown",
+                    language: language,
+                    cosineScore: cScore,
+                    jaccardScore: jScore,
+                    verdict: verdict
+                }
             });
+
+            if (!created) {
+                console.log(`[ANTICHEAT] Check already exists for pair: ${s1Id} <-> ${s2Id}`);
+                continue;
+            }
 
             console.log(`[ANTICHEAT] Flagged pair: ${submissionId} <-> ${prior.submissionId} (Score: ${jScore.toFixed(2)})`);
 

@@ -71,21 +71,32 @@ async function getTokensAndHistogram(code, lang) {
     if (!parser) throw new Error(`Unsupported language: ${lang}`);
     
     const tree = parser.parse(code);
-    if (tree.rootNode.hasError) {
-        // Notice: If tree-sitter returns a tree with errors, we can still trace it,
-        // but plan suggests to mark it as error or just continue. 
-        // We'll normalize it anyway but keep in mind it might be unparseable logic.
-    }
-    
+    // Even trees with parse errors are normalized — tree-sitter always returns a tree.
     const tokens = normalize(tree.rootNode);
     const histogram = buildHistogram(tokens);
     
     return { tokens, histogram };
 }
 
+/**
+ * Parse code and return the raw tree-sitter Tree object.
+ * Used by graph/treeDiff.js to access the SyntaxNode tree for TED.
+ *
+ * @param {string} code - Source code
+ * @param {string} lang - 'cpp' | 'c' | 'python' | 'java'
+ * @returns {Promise<Tree>} tree-sitter Tree (tree.rootNode is the root SyntaxNode)
+ */
+async function parseToTree(code, lang) {
+    await initParsers();
+    const parser = parsers[lang];
+    if (!parser) throw new Error(`Unsupported language: ${lang}`);
+    return parser.parse(code);
+}
+
 module.exports = {
     initParsers,
     getTokensAndHistogram,
+    parseToTree,
     normalize,
     buildHistogram
 };

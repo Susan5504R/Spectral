@@ -4,7 +4,12 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:anticheat": "node anticheat/tests/test_logic_rapid.js"
+    "test:anticheat": "node anticheat/tests/test_logic_rapid.js",
+    "graph:schema": "cross-env DB_HOST=127.0.0.1 DB_PORT=5433 node graph/schema.js",
+    "graph:verify": "cross-env DB_HOST=127.0.0.1 DB_PORT=5433 node graph/tests/phase1_verify.js",
+    "graph:ted-test": "node graph/tests/tedTests.js",
+    "graph:label-test": "node graph/tests/labelerTests.js",
+    "graph:e2e-test": "cross-env DB_HOST=127.0.0.1 DB_PORT=5433 node graph/tests/phase4_verify.js"
   },
   "keywords": [],
   "author": "",
@@ -12,12 +17,14 @@
   "description": "",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.70.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "install": "^0.13.0",
     "ioredis": "^5.9.3",
+    "jsonwebtoken": "^9.0.3",
     "nodemon": "^3.1.11",
     "pg": "^8.20.0",
     "pg-hstore": "^2.3.4",
@@ -31,6 +38,7 @@
     "web-tree-sitter": "^0.22.6"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "tree-sitter-cli": "^0.26.8"
   }
 }
