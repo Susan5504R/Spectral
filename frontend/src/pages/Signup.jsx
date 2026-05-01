@@ -13,7 +13,7 @@ export default function Signup() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
+const [adminKey, setAdminKey] = useState("");
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
@@ -26,11 +26,12 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      await api.post("/register", {
-        username,
-        email, // ✅ added
-        password
-      });
+await api.post("/register", {
+  username,
+  email,
+  password,
+  adminKey
+});
 
       alert("Account created successfully!");
       navigate("/login");
@@ -93,7 +94,13 @@ export default function Signup() {
             required
             className="p-2 bg-slate-900 border border-slate-600 rounded"
           />
-
+          <input
+  type="password"
+  placeholder="Admin Key (optional)"
+  value={adminKey}
+  onChange={(e) => setAdminKey(e.target.value)}
+  className="bg-slate-900 border border-slate-600 px-4 py-2 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+/>
           <button
             type="submit"
             disabled={loading}

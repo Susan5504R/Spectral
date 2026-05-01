@@ -25,7 +25,7 @@ const {
 } = require("./db");
 // const { User, Submission, Problem, TestCase, PlagiarismCheck } = require("./db");
 console.log("🔥 NEW SERVER WITH FORGOT PASSWORD ROUTE LOADED");
-const { authenticateToken, SECRET } = require("./auth");
+const { authenticateToken, requireAdmin, SECRET } = require("./auth");
 const graphClient = require('./graph/client');
 const { getOrGenerateHint } = require('./graph/hintEngine');
 
@@ -410,7 +410,7 @@ app.get("/status/:id", authenticateToken, async (req, res) => {
 // });
 app.post("/register", async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { username, email, password, adminKey } = req.body;
 
         const existingUser = await User.findOne({
             where: {
@@ -422,25 +422,27 @@ app.post("/register", async (req, res) => {
             return res.status(400).json({ error: "Username or Email already exists" });
         }
 
+        const isAdmin = adminKey === process.env.ADMIN_SIGNUP_KEY;
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = await User.create({
             username,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            isAdmin
         });
 
         res.status(201).json({
             message: "User created",
-            userId: user.id
+            userId: user.id,
+            isAdmin: user.isAdmin
         });
 
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-
-
 app.post("/reset-password/:token", async (req, res) => {
     try {
         const { token } = req.params;
@@ -542,10 +544,7 @@ app.post("/submit", authenticateToken, async (req, res) => {
     }
 });
 
-app.post("/admin/problem", authenticateToken, (req, res, next) => {
-    if (!req.user.isAdmin) return res.status(403).json({ error: "Admin access required" });
-    next();
-}, async (req, res) => {
+app.post("/admin/problem", authenticateToken, requireAdmin, async (req, res) => {
     try {
         const {
             title,

@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import api from "../api/axiosInstance";
-
+import { jwtDecode } from "jwt-decode";
 export default function Login() {
   const navigate = useNavigate();
 
@@ -18,9 +18,17 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const { data } = await api.post("/login", { username, password });
-      localStorage.setItem("token", data.token);
-      navigate("/");
+const { data } = await api.post("/login", { username, password });
+
+localStorage.setItem("token", data.token);
+
+const decoded = jwtDecode(data.token);
+
+if (decoded.isAdmin) {
+  navigate("/admin/add-problem");
+} else {
+  navigate("/");
+}
     } catch (err) {
       setError(err.response?.data?.error || "Login failed");
     } finally {
