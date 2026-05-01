@@ -55,6 +55,7 @@ const worker = new Worker("python-codes", async (job) => {
     let finalOutput = "";
     let errorMsg = null, capturedError = null;
     let filepath;
+    let failedTestCase = null;
 
     console.log(`\n[JOB ${job.id}] Processing ${language?.toUpperCase()} for problem ${problemId}...`);
 
@@ -82,12 +83,24 @@ const worker = new Worker("python-codes", async (job) => {
 
                     if (normalize(result.output) !== normalize(tc.expectedOutput)) {
                         status = "Wrong Answer";
+                        failedTestCase = {
+                            input: tc.input,
+                            expected: tc.expectedOutput,
+                            actual: result.output,
+                            isHidden: tc.isHidden
+                        };
                         break;
                     }
                 } catch (err) {
                     errorMsg = err.message || "Unknown error";
                     status = classifyError(err, errorMsg);
                     capturedError = err;
+                    failedTestCase = {
+                        input: tc.input,
+                        expected: tc.expectedOutput,
+                        actual: errorMsg,
+                        isHidden: tc.isHidden
+                    };
                     break;
                 } finally {
                     if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
@@ -106,6 +119,12 @@ const worker = new Worker("python-codes", async (job) => {
                 status = "Accepted";
                 if (expectedOutput !== undefined && normalize(finalOutput) !== normalize(expectedOutput)) {
                     status = "Wrong Answer";
+                    failedTestCase = {
+                        input: input || "No input provided",
+                        expected: expectedOutput,
+                        actual: finalOutput,
+                        isHidden: false // Single-run mode input is always public
+                    };
                 }
             } catch (err) {
                 errorMsg = err.message || "Unknown error";
@@ -122,6 +141,16 @@ const worker = new Worker("python-codes", async (job) => {
     }
 
     console.log(`[JOB ${job.id}] Time: ${totalTime.toFixed(2)} ms | Memory: ${peakMemory.toFixed(2)} MB | STATUS: ${status}`);
+    
+    if (status !== "Accepted" && status !== "Pending" && failedTestCase) {
+        console.log("\n--- FAILURE DETAILS ---");
+        console.log(`Type:     ${failedTestCase.isHidden ? 'HIDDEN' : 'PUBLIC'}`);
+        console.log(`Input:    ${failedTestCase.input}`);
+        console.log(`Expected: ${failedTestCase.expected}`);
+        console.log(`Actual:   ${failedTestCase.actual}`);
+        console.log("-----------------------\n");
+    }
+
     if (errorMsg && (status === "Compilation Error" || status === "Runtime Error")) {
         console.log(`[JOB ${job.id}] ERROR:\n${errorMsg}`);
     }
@@ -129,7 +158,7 @@ const worker = new Worker("python-codes", async (job) => {
     try {
         if (submissionId) {
             await Submission.update(
-                { status, output: finalOutput, error: errorMsg },
+                { status, output: finalOutput, error: errorMsg, details: failedTestCase },
                 { where: { id: submissionId } }
             );
 

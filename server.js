@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const { Queue } = require("bullmq");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
@@ -20,6 +21,7 @@ const graphClient = require('./graph/client');
 const { getOrGenerateHint } = require('./graph/hintEngine');
 
 const app = express();
+app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", credentials: true }));
 app.use(express.json());
 
 const REDIS_HOST = process.env.REDIS_HOST || "localhost";
@@ -94,7 +96,14 @@ app.get("/problems", authenticateToken, async (req, res) => {
 app.get("/problems/:id", authenticateToken, async (req, res) => {
     try {
         const problem = await Problem.findByPk(req.params.id, {
-            include: [Topic]
+            include: [
+                Topic,
+                {
+                    model: TestCase,
+                    where: { isHidden: false },
+                    required: false
+                }
+            ]
         });
 
         if (!problem) {
@@ -120,11 +129,44 @@ app.get("/problems/:id", authenticateToken, async (req, res) => {
             id: problem.id,
             title: problem.title,
             description: problem.description,
+            constraints: problem.constraints,
             difficulty: problem.difficulty,
             topics: problem.Topics?.map(t => t.name) || [],
+            testCases: problem.TestCases?.map(tc => ({
+                input: tc.input,
+                output: tc.expectedOutput
+            })) || [],
             solved: !!solved,
             favourite: !!favourite
         });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/problems/:id/editorial", authenticateToken, async (req, res) => {
+    try {
+        const problem = await Problem.findByPk(req.params.id, {
+            attributes: ["id", "editorialDescription", "editorialSolutions"]
+        });
+        if (!problem) return res.status(404).json({ error: "Problem not found" });
+        res.json(problem);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/problems/:id/submissions", authenticateToken, async (req, res) => {
+    try {
+        const submissions = await Submission.findAll({
+            where: {
+                problemId: req.params.id,
+                userId: req.user.id
+            },
+            include: [{ model: ExecutionMetrics, attributes: ["execution_time_ms", "memory_usage_mb"] }],
+            order: [["createdAt", "DESC"]]
+        });
+        res.json(submissions);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -288,8 +330,11 @@ app.get("/status/:id", authenticateToken, async (req, res) => {
         res.json({
             id: submission.id,
             status: submission.status,
+            code: submission.code,
+            language: submission.language,
             output: submission.output,
-            error: submission.error
+            error: submission.error,
+            details: submission.details
         });
     } catch (err) {
         res.status(500).json({ error: "Error fetching status" });
@@ -340,7 +385,7 @@ app.post("/login", async (req, res) => {
     const { username, password } = req.body;
     const user = await User.findOne({ where: { username } });
     if (user && await bcrypt.compare(password, user.password)) {
-        const token = jwt.sign({ id: user.id, username: user.username }, SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ id: user.id, username: user.username, isAdmin: user.isAdmin }, SECRET, { expiresIn: '1h' });
         res.json({ token });
     } else {
         res.status(401).json({ error: "Invalid credentials" });
@@ -376,7 +421,10 @@ app.post("/submit", authenticateToken, async (req, res) => {
     }
 });
 
-app.post("/admin/problem", async (req, res) => {
+app.post("/admin/problem", authenticateToken, (req, res, next) => {
+    if (!req.user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+    next();
+}, async (req, res) => {
     try {
         const {
             title,

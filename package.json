@@ -18,7 +18,8 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^3.0.3",
-    "bullmq": "^5.70.1",
+    "cors": "^2.8.6",
+    "bullmq": "^5.76.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "install": "^0.13.0",

@@ -7,7 +7,7 @@ async function storeFingerprint(submissionId, code, lang, problemId, userId) {
         await ASTFingerprint.create({
             submissionId,
             userId,
-            problemId: problemId || 'default',
+            problemId: problemId || null,
             language: lang,
             tokens: JSON.stringify(tokens),
             histogram

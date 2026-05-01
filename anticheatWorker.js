@@ -53,7 +53,7 @@ const anticheatWorker = new Worker("anticheat", async (job) => {
             const [check, created] = await PlagiarismCheck.findOrCreate({
                 where: { sub1Id: s1Id, sub2Id: s2Id },
                 defaults: {
-                    problemId: problemId || "unknown",
+                    problemId: problemId || null,
                     language: language,
                     cosineScore: cScore,
                     jaccardScore: jScore,

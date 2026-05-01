@@ -3,17 +3,23 @@ const { Sequelize, DataTypes } = require("sequelize");
 const dbHost = process.env.DB_HOST || "127.0.0.1";
 const defaultDbPort = dbHost === "127.0.0.1" || dbHost === "localhost" ? 5433 : 5432;
 
-const sequelize = new Sequelize('postgres', 'postgres', 'mysecretpassword', {
-    host: dbHost,
-    dialect: 'postgres',
-    port: Number(process.env.DB_PORT || defaultDbPort),
-    logging: false
-});
+const sequelize = new Sequelize(
+    process.env.POSTGRES_DB || 'postgres',
+    process.env.POSTGRES_USER || 'postgres',
+    process.env.POSTGRES_PASSWORD || 'mysecretpassword',
+    {
+        host: dbHost,
+        dialect: 'postgres',
+        port: Number(process.env.DB_PORT || defaultDbPort),
+        logging: false
+    }
+);
 
 const User = sequelize.define("User", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     username: { type: DataTypes.STRING, unique: true, allowNull: false },
     password: { type: DataTypes.STRING, allowNull: false },
+    isAdmin: { type: DataTypes.BOOLEAN, defaultValue: false },
     bio: { type: DataTypes.TEXT },
 avatarUrl: { type: DataTypes.STRING }
 });
@@ -22,7 +28,10 @@ const Problem = sequelize.define("Problem", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     title: { type: DataTypes.STRING, allowNull: false },
     description: { type: DataTypes.TEXT },
+    constraints: { type: DataTypes.TEXT },
     difficulty: { type: DataTypes.ENUM('Easy', 'Medium', 'Hard') },
+    editorialDescription: { type: DataTypes.TEXT },
+    editorialSolutions: { type: DataTypes.JSONB } // Stores { python: "...", cpp: "...", etc. }
 });
 
 const TestCase = sequelize.define("TestCase", {
@@ -40,7 +49,8 @@ const Submission = sequelize.define("Submission", {
     input: { type: DataTypes.TEXT },
     output: { type: DataTypes.TEXT },
     status: { type: DataTypes.STRING, defaultValue: "Pending" },
-    error: { type: DataTypes.TEXT }
+    error: { type: DataTypes.TEXT },
+    details: { type: DataTypes.JSONB }
 });
 
 const ExecutionMetrics = sequelize.define("ExecutionMetrics", {
@@ -138,7 +148,7 @@ Problem.belongsToMany(User, { through: UserProblem, as: "SolvedByUsers" });
 User.belongsToMany(Problem, { through: FavouriteProblem, as: "FavouriteProblems" });
 Problem.belongsToMany(User, { through: FavouriteProblem, as: "FavouritedByUsers" });
 
-sequelize.sync({ alter: true }).catch(err => {
+sequelize.sync().catch(err => {
     if (err.original && err.original.code === '42701') {
         console.log('[DB] Tables already up to date.');
     } else {

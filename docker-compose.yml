@@ -58,6 +58,16 @@ services:
       redis:
         condition: service_started
 
+  # ── Sandbox Runner Image ──────────────────────────────────────────────────
+  # Builds the spectral-runner image used by the worker to execute user code.
+  # Must exist locally before the worker starts — docker run uses --pull=never.
+  spectral-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    image: spectral-runner
+    command: echo "spectral-runner image built"
+
   # ── Code Execution Worker ─────────────────────────────────────────────────
   worker:
     build: .
@@ -69,7 +79,10 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      - HOST_PWD=${PWD}
+      # HOST_PWD must be the absolute path to this project on the host machine.
+      # Docker Compose v2 sets COMPOSE_PROJECT_DIR automatically; on Windows set
+      # HOST_PWD manually in .env if COMPOSE_PROJECT_DIR is not available.
+      - HOST_PWD=${HOST_PWD:-${COMPOSE_PROJECT_DIR}}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/usr/src/app
@@ -79,6 +92,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      spectral-runner:
+        condition: service_completed_successfully
 
   # ── Anti-Cheat Worker ─────────────────────────────────────────────────────
   anticheat-worker:
@@ -119,4 +134,4 @@ services:
         condition: service_started
 
 volumes:
-  pgdata:
+  pgdata:
