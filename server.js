@@ -1,9 +1,12 @@
 const express = require("express");
+const cors = require("cors");
+
 const { Queue } = require("bullmq");
 const { v4: uuidv4 } = require("uuid");
 const { Submission } = require("./db");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // Connect using environment variables for Docker networking
