@@ -43,12 +43,16 @@ export default function Problem() {
     setLoading(true);
     setResult(null);
     const token = localStorage.getItem("token");
-    
+
+    const body = endpoint === "/run"
+      ? { code, language, input: problem.testCases?.[0]?.input ?? "" }
+      : { code, language, problemId: id };
+
     try {
       const res = await fetch(`http://localhost:5000${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code, language, problemId: id })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       setResult({ status: "Queued", submissionId: data.submissionId });
