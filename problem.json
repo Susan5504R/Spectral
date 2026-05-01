@@ -1,0 +1,16 @@
+{
+  "title": "Add Two Numbers",
+  "description": "Given two integers, print their sum.",
+  "testCases": [
+    {
+      "input": "2 3",
+      "expectedOutput": "5",
+      "isHidden": false
+    },
+    {
+      "input": "10 20",
+      "expectedOutput": "30",
+      "isHidden": true
+    }
+  ]
+}

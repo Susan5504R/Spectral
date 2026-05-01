@@ -36,13 +36,50 @@ async function initDb(options = {}) {
 
 const User = sequelize.define("User", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-    username: { type: DataTypes.STRING, unique: true, allowNull: false },
-    password: { type: DataTypes.STRING, allowNull: false },
-    isAdmin: { type: DataTypes.BOOLEAN, defaultValue: false },
-    bio: { type: DataTypes.TEXT },
-avatarUrl: { type: DataTypes.STRING }
-});
 
+    username: {
+        type: DataTypes.STRING,
+        unique: true,
+        allowNull: false
+    },
+
+    email: {
+        type: DataTypes.STRING,
+        unique: true,
+        allowNull: false,
+        validate: {
+            isEmail: true
+        }
+    },
+
+    password: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+
+    isAdmin: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+
+    bio: {
+        type: DataTypes.TEXT
+    },
+
+    avatarUrl: {
+        type: DataTypes.STRING
+    },
+
+    resetToken: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+
+    resetTokenExpiry: {
+        type: DataTypes.DATE,
+        allowNull: true
+    }
+});
 const Problem = sequelize.define("Problem", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     title: { type: DataTypes.STRING, allowNull: false },
@@ -183,6 +220,41 @@ Problem.belongsToMany(User, { through: UserProblem, as: "SolvedByUsers" });
 User.belongsToMany(Problem, { through: FavouriteProblem, as: "FavouriteProblems" });
 Problem.belongsToMany(User, { through: FavouriteProblem, as: "FavouritedByUsers" });
 
+// sequelize.sync().catch(err => {
+//     if (err.original && err.original.code === '42701') {
+//         console.log('[DB] Tables already up to date.');
+//     } else {
+//         console.error('[DB] Sync error:', err.message);
+//     }
+// });
+
+// module.exports = {
+//     sequelize,
+//     User,
+//     Problem,
+//     TestCase,
+//     Submission,
+//     ASTFingerprint,
+//     PlagiarismCheck,
+//     ExecutionMetrics,
+//     TransformationLabel,
+//     HintQuery,
+//     Topic,
+// UserProblem,
+// FavouriteProblem,
+// };
+sequelize.sync({ alter: true })
+    .then(() => {
+        console.log("[DB] Database synced successfully.");
+    })
+    .catch(err => {
+        if (err.original && err.original.code === "42701") {
+            console.log("[DB] Tables already up to date.");
+        } else {
+            console.error("[DB] Sync error:", err.message);
+        }
+    });
+
 module.exports = {
     sequelize,
     initDb,
@@ -198,5 +270,4 @@ module.exports = {
     Topic,
     UserProblem,
     FavouriteProblem,
-    Activity,
 };

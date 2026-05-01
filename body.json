@@ -1,4 +1,5 @@
 {
-  "problemId": "3a3adc9c-cf87-4a1f-a0d3-f7894f516837",
-  "code": "#include <bits/stdc++.h>\nusing namespace std;\nint main(){int a,b;cin>>a>>b;cout<<a+b;}"
+  "code": "#include <iostream>\nusing namespace std;\nint main(){int a,b;cin>>a>>b;cout<<a+b;}",
+  "language": "cpp",
+  "input": "2 3"
 }
