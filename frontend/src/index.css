@@ -4,3 +4,11 @@
 body {
   font-family: 'Inter', sans-serif;
 }
+.color-empty {
+  fill: #1e293b;
+}
+.color-scale-1 { fill: #1d4ed8; }
+.color-scale-2 { fill: #2563eb; }
+.color-scale-3 { fill: #3b82f6; }
+.color-scale-4 { fill: #60a5fa; }
+.color-scale-5 { fill: #93c5fd; }

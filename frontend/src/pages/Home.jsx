@@ -8,18 +8,43 @@ export default function Home() {
     <div className="min-h-screen bg-slate-900 text-white flex flex-col overflow-hidden">
 
       {/* Navbar */}
-      <div className="flex justify-between items-center px-8 py-4 border-b border-slate-700">
-        <h1 className="text-xl font-semibold tracking-wide">Code Engine</h1>
+<div className="flex justify-between items-center px-8 py-4 border-b border-slate-700">
+  <h1 className="text-xl font-semibold tracking-wide">Code Engine</h1>
 
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => navigate("/problems")}
-          className="bg-blue-600 px-4 py-1.5 rounded-md hover:bg-blue-700"
-        >
-          Start Solving
-        </motion.button>
-      </div>
+  <div className="flex gap-4 items-center">
+    
+    {/* Login Button */}
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={() => navigate("/login")}
+      className="px-4 py-1.5 rounded-md border border-slate-500 hover:border-blue-500 hover:text-blue-400 transition"
+    >
+      Login
+    </motion.button>
+
+    {/* Sign Up Button */}
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={() => navigate("/signup")}
+      className="px-4 py-1.5 rounded-md border border-slate-500 hover:border-blue-500 hover:text-blue-400 transition"
+    >
+      Sign Up
+    </motion.button>
+
+    {/* Start Solving */}
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={() => navigate("/problems")}
+      className="bg-blue-600 px-4 py-1.5 rounded-md hover:bg-blue-700"
+    >
+      Start Solving
+    </motion.button>
+
+  </div>
+</div>
 
       {/* Hero Section */}
       <div className="flex flex-col items-center justify-center text-center flex-1 px-6 relative">

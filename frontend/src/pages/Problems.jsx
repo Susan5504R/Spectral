@@ -178,11 +178,6 @@ export default function Problems() {
           ))
         )}
       </div>
-
-      {/* Footer hint */}
-      <div className="mt-4 text-xs text-slate-500">
-        Tip: Click a row to open the problem (we’ll wire routing next).
-      </div>
     </div>
   );
 }
