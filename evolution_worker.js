@@ -33,25 +33,120 @@ const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
 
 // Only attempt graph tracking for these states (avoids garbage syntax-error trees)
-const VALID_STATES = ['success', 'Wrong Answer', 'Time Limit Exceeded', 'Runtime Error'];
+const VALID_STATES = ['Accepted', 'Wrong Answer', 'Time Limit Exceeded', 'Runtime Error'];
+
+// ─── Approach & Data Structure Detection ──────────────────────────────────────
+
+/**
+ * Scan source code to detect the algorithmic approach and data structures used.
+ * Returns { approach: string, dataStructures: string[] }
+ */
+function detectApproach(code, lang) {
+    const c = code.toLowerCase();
+    const ds = [];
+    const patterns = [];
+
+    // ── Data Structure Detection ──────────────────────────────────────────
+    const DS_MAP = [
+        { keywords: ['unordered_map', 'hashmap', 'dict(', 'defaultdict', '= {}', '= dict('], name: 'HashMap' },
+        { keywords: ['unordered_set', 'hashset', 'set()', 'set([', '= set('], name: 'HashSet' },
+        { keywords: ['sorted(', '.sort(', 'sort(', 'arrays.sort', 'collections.sort', 'std::sort'], name: 'Sorting' },
+        { keywords: ['stack<', 'stack(', 'stack()', 'lifo'], name: 'Stack' },
+        { keywords: ['queue<', 'queue(', 'arraydeque', 'collections.deque', 'deque('], name: 'Queue' },
+        { keywords: ['priority_queue', 'priorityqueue', 'heapq', 'heap'], name: 'Heap' },
+        { keywords: ['linked', 'listnode', 'next =', '->next'], name: 'LinkedList' },
+        { keywords: ['tree', 'treenode', 'root.left', 'root.right', '->left', '->right'], name: 'Tree' },
+        { keywords: ['graph[', 'adj[', 'adjacency', 'addedge', 'edges['], name: 'Graph' },
+        { keywords: ['dp[', 'dp =', 'memo[', '@lru_cache', '@cache', 'memo ='], name: 'DP Table' },
+        { keywords: ['bisect', 'binary_search', 'lower_bound', 'upper_bound'], name: 'Binary Search' },
+    ];
+
+    for (const entry of DS_MAP) {
+        if (entry.keywords.some(kw => c.includes(kw))) {
+            ds.push(entry.name);
+        }
+    }
+
+    // ── Algorithm Pattern Detection ───────────────────────────────────────
+    const loopMatches = code.match(/\b(for|while)\b/g) || [];
+    const hasNestedLoops = loopMatches.length >= 2;
+    const hasTwoPointers = (c.includes('left') || c.includes('lo ')) && (c.includes('right') || c.includes('hi '));
+    const hasBinarySearch = ds.includes('Binary Search') || (c.includes('mid') && c.includes('while') && (c.includes('low') || c.includes('left')));
+    const hasSorting = ds.includes('Sorting');
+    // Recursion detection: look for a function that calls ITSELF by name
+    // Avoid false positives from solve() being the main entry point
+    const funcDefs = code.match(/def\s+(\w+)\s*\(/g) || [];
+    let hasRecursion = false;
+    for (const fd of funcDefs) {
+        const fname = fd.match(/def\s+(\w+)/)[1];
+        if (fname === 'solve' || fname === 'main') continue; // skip entry points
+        const bodyRegex = new RegExp(`\\b${fname}\\s*\\(`, 'g');
+        const callCount = (code.match(bodyRegex) || []).length;
+        if (callCount >= 2) { hasRecursion = true; break; } // called 2+ times = recursive
+    }
+
+    // Priority-based approach detection (most specific wins)
+    if (ds.includes('DP Table')) patterns.push('Dynamic Programming');
+    if (hasRecursion && ds.includes('DP Table')) patterns.push('Memoized Recursion');
+    if (hasRecursion && !ds.includes('DP Table')) patterns.push('Recursion');
+    if (hasBinarySearch) patterns.push('Binary Search');
+    if (hasSorting && hasTwoPointers) patterns.push('Sort + Two Pointers');
+    else if (hasTwoPointers) patterns.push('Two Pointers');
+    else if (hasSorting && hasBinarySearch) patterns.push('Sort + Binary Search');
+    else if (hasSorting) patterns.push('Sorting-Based');
+    if (ds.includes('HashMap') || ds.includes('HashSet')) patterns.push('Hash-Based Lookup');
+    if (ds.includes('Heap')) patterns.push('Greedy / Heap');
+    if (ds.includes('Stack')) patterns.push('Stack-Based');
+    if (ds.includes('Queue')) patterns.push('BFS / Queue');
+    if (ds.includes('Graph')) patterns.push('Graph Algorithm');
+
+    // Fallback
+    if (patterns.length === 0) {
+        if (hasNestedLoops) patterns.push('Brute Force');
+        else if ((code.match(/\b(for|while)\b/g) || []).length === 1) patterns.push('Linear Scan');
+        else patterns.push('Direct Computation');
+    }
+
+    return {
+        approach: patterns[0],         // Primary approach
+        approaches: patterns,          // All detected approaches  
+        dataStructures: ds,            // All data structures found
+    };
+}
 
 // ─── Graph Upsert Helpers ─────────────────────────────────────────────────────
 
 /**
  * Ensure a CodeState vertex exists in AGE.
  * Vertices are deduplicated by hash (computed from normalized AST tokens).
- * @param {string} hash
- * @param {string} code
- * @param {string} lang
- * @param {string} complexity (e.g. 'O(N^2)')
- * @param {string} problemId
- * @param {boolean} isAccepted
  */
 async function ensureVertex(hash, code, lang, complexity, problemId, isAccepted = false) {
     const acceptedSetter = isAccepted ? `, n.accepted = true` : ``;
+    
+    // Detect approach and data structures from the code
+    const { approach, approaches, dataStructures } = detectApproach(code, lang);
+    
+    // Extract the algorithmic core — skip boilerplate I/O lines
+    const BOILERPLATE = /^\s*(import |from |#include|using |sys\.stdin|input\(|lines\s*=|if\s+(not\s+)?lines|def\s+solve|def\s+main|if\s+__name__|int\s+main|void\s+main|public\s+static|Scanner|BufferedReader|target\s*=\s*int)/;
+    const coreLines = (code || '').split('\n').filter(l => l.trim() && !BOILERPLATE.test(l));
+    const snippet = coreLines.slice(0, 6).join('\n').slice(0, 200).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+    
+    // Serialize arrays safely for Cypher
+    const approachStr = (approach || 'Unknown').replace(/'/g, "\\'");
+    const allApproachesStr = JSON.stringify(approaches).replace(/'/g, "\\'");
+    const dsStr = JSON.stringify(dataStructures).replace(/'/g, "\\'");
+    
     const cypher = `
         MERGE (n:CodeState { id: '${hash}_${problemId}' })
-        SET n.code = ${JSON.stringify(code)}, n.language = '${lang}', n.complexity = '${complexity}', n.problemId = '${problemId}'${acceptedSetter}
+        SET n.hash = '${hash}', 
+            n.language = '${lang}', 
+            n.complexity = '${complexity}', 
+            n.problemId = '${problemId}', 
+            n.snippet = '${snippet}',
+            n.approach = '${approachStr}',
+            n.approaches = '${allApproachesStr}',
+            n.dataStructures = '${dsStr}'
+            ${acceptedSetter}
     `;
     await graphClient.cypher(cypher);
 }
@@ -114,7 +209,7 @@ async function processEvolutionParams(submissionId) {
         const internal = fromTreeSitter(tsTree.rootNode);
         currentComp = estimateComplexity(internal);
         
-        const isAccepted = (current.status === 'success');
+        const isAccepted = (current.status === 'Accepted');
         await ensureVertex(currentHash, current.code, lang, currentComp, current.problemId, isAccepted);
     } catch (e) {
         console.warn(`[Evolution] Failed to process vertex for Sub ${submissionId}: ${e.message}`);
@@ -137,7 +232,7 @@ async function processEvolutionParams(submissionId) {
         const pInternal = fromTreeSitter(pTsTree.rootNode);
         prevComp = estimateComplexity(pInternal);
 
-        const isAccepted = (prev.status === 'success');
+        const isAccepted = (prev.status === 'Accepted');
         await ensureVertex(prevHash, prev.code, lang, prevComp, prev.problemId, isAccepted);
     } catch (e) {
         console.warn(`[Evolution] Failed to process PREV vertex for Sub ${submissionId}: ${e.message}`);

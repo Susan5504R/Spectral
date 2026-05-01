@@ -604,6 +604,109 @@ app.get("/graph/stats", async (req, res) => {
     }
 });
 
+app.get("/graph/visualize/:problemId", async (req, res) => {
+    try {
+        const problemId = req.params.problemId;
+        
+        // AGE agtype helper - strip extra quotes from returned strings
+        const strip = (v) => {
+            if (v === null || v === undefined) return null;
+            if (typeof v === 'string') return v.replace(/^"|"$/g, '');
+            return v;
+        };
+        
+        // Safe JSON parse with fallback
+        const safeParseArray = (v) => {
+            try {
+                const s = strip(v);
+                if (!s) return [];
+                const parsed = JSON.parse(s);
+                return Array.isArray(parsed) ? parsed : [parsed];
+            } catch { return []; }
+        };
+        
+        // 1. Fetch nodes with approach and data structure metadata
+        const nodesQuery = `
+            MATCH (n:CodeState) 
+            WHERE n.problemId = '${problemId}'
+            RETURN id(n) AS id, n.hash AS hash, n.accepted AS accepted, n.language AS language, 
+                   n.complexity AS complexity, n.snippet AS snippet, n.approach AS approach,
+                   n.approaches AS approaches, n.dataStructures AS dataStructures
+        `;
+        const nodesRaw = await graphClient.cypher(nodesQuery);
+        
+        // 2. Fetch full submission code from SQL for each hash
+        const { Submission } = require('./db');
+        const allSubs = await Submission.findAll({
+            where: { problemId },
+            attributes: ['id', 'code', 'status', 'language', 'createdAt'],
+            order: [['createdAt', 'ASC']]
+        });
+        
+        const nodes = nodesRaw.map((row, idx) => ({
+            id: String(row.id),
+            data: { 
+                label: strip(row.approach) || `State ${idx + 1}`,
+                hash: strip(row.hash),
+                isSolution: row.accepted === true || strip(row.accepted) === 'true',
+                language: strip(row.language),
+                complexity: strip(row.complexity),
+                snippet: strip(row.snippet),
+                approach: strip(row.approach) || 'Unknown',
+                approaches: safeParseArray(row.approaches),
+                dataStructures: safeParseArray(row.dataStructures),
+                stateNumber: idx + 1
+            },
+            position: { x: 0, y: 0 }
+        }));
+
+        // 3. Fetch edges with full transformation details
+        const edgesQuery = `
+            MATCH (a:CodeState)-[e:TRANSFORMED]->(b:CodeState)
+            WHERE a.problemId = '${problemId}' AND b.problemId = '${problemId}'
+            RETURN id(e) AS id, id(a) AS source, id(b) AS target, e.labels AS labels, 
+                   e.distance AS distance, e.complexityDelta AS complexityDelta, e.source AS labelSource,
+                   e.jaccard AS jaccard, e.weight AS weight
+        `;
+        const edgesRaw = await graphClient.cypher(edgesQuery);
+        
+        const edges = edgesRaw.map(row => {
+            const labels = safeParseArray(row.labels);
+            const labelText = labels.length > 0 ? labels.join(', ') : 'Structural Change';
+
+            return {
+                id: String(row.id),
+                source: String(row.source),
+                target: String(row.target),
+                label: labelText,
+                data: {
+                    labels,
+                    distance: strip(row.distance),
+                    complexityDelta: strip(row.complexityDelta),
+                    labelSource: strip(row.labelSource),
+                    jaccard: strip(row.jaccard),
+                    weight: strip(row.weight)
+                },
+                type: 'smoothstep'
+            };
+        });
+
+        // 4. Include submission timeline for code viewing
+        const timeline = allSubs.map(s => ({
+            id: s.id,
+            status: s.status,
+            language: s.language,
+            code: s.code,
+            createdAt: s.createdAt
+        }));
+
+        res.json({ nodes, edges, timeline });
+    } catch (err) {
+        console.error("Graph Visualize Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {

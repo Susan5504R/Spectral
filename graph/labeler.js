@@ -292,11 +292,6 @@ const rules = [
 /**
  * Run all rules against the ops list and optional code strings.
  * Returns an array of matched labels (may be empty or multi-label).
- *
- * @param  {Array}  ops   - extractOps output
- * @param  {string} code1 - previous code
- * @param  {string} code2 - current code
- * @returns {string[]|null} matched label list, or null if empty
  */
 function applyRules(ops, code1 = '', code2 = '') {
     const matched = rules.filter(r => {
@@ -309,12 +304,86 @@ function applyRules(ops, code1 = '', code2 = '') {
     return matched.length > 0 ? matched.map(r => r.label) : null;
 }
 
+// ─── Smart Fallback Label Generator ───────────────────────────────────────────
+
+/**
+ * When neither rules nor Gemini can classify the transformation,
+ * generate a meaningful label from the raw diff operations and code analysis.
+ */
+function describeFallback(ops, code1, code2) {
+    const ins = insertedTypes(ops);
+    const del = deletedTypes(ops);
+    const labels = [];
+
+    // ── Data structure additions (code-level keyword scan) ────────────────
+    const DS_PATTERNS = [
+        { keywords: ['dict(', '{}', '.get(', '.items(', '.keys(', '.values(', 'defaultdict'], label: 'Added Dictionary' },
+        { keywords: ['set(', 'frozenset(', '.add(', '.discard('], label: 'Added Set' },
+        { keywords: ['unordered_map', 'map<', 'HashMap'], label: 'Added Map' },
+        { keywords: ['unordered_set', 'set<', 'HashSet'], label: 'Added Set' },
+        { keywords: ['deque', 'queue', 'Queue'], label: 'Added Queue' },
+        { keywords: ['stack', 'Stack'], label: 'Added Stack' },
+        { keywords: ['heapq', 'PriorityQueue', 'priority_queue'], label: 'Added Heap' },
+        { keywords: ['sorted(', 'sort(', '.sort(', 'Arrays.sort'], label: 'Added Sorting' },
+        { keywords: ['bisect', 'binary_search', 'lower_bound', 'upper_bound'], label: 'Added Binary Search' },
+    ];
+
+    for (const pat of DS_PATTERNS) {
+        if (!codeHas(code1, pat.keywords) && codeHas(code2, pat.keywords)) {
+            labels.push(pat.label);
+        }
+    }
+
+    // ── Structural changes ────────────────────────────────────────────────
+    const loopTypes = ['for_statement', 'while_statement', 'do_statement', 'for_in_statement', 'enhanced_for_statement'];
+    const condTypes = ['if_statement', 'elif_clause', 'else_clause', 'switch_statement'];
+
+    const addedLoops = loopTypes.filter(t => ins.has(t)).length;
+    const removedLoops = loopTypes.filter(t => del.has(t)).length;
+    const addedConds = condTypes.filter(t => ins.has(t)).length;
+    const removedConds = condTypes.filter(t => del.has(t)).length;
+
+    if (removedLoops > 0 && addedLoops === 0) labels.push('Removed Loop');
+    if (addedLoops > 0 && removedLoops === 0) labels.push('Added Loop');
+    if (removedLoops > 0 && addedLoops > 0) labels.push('Restructured Loops');
+
+    if (addedConds > removedConds + 1) labels.push('Added Conditional Logic');
+    if (removedConds > addedConds + 1) labels.push('Simplified Conditionals');
+
+    if (ins.has('function_definition') || ins.has('function_declaration') || ins.has('method_declaration')) {
+        labels.push('Extracted Helper Function');
+    }
+    if (ins.has('return_statement') && !del.has('return_statement')) {
+        labels.push('Added Early Return');
+    }
+
+    // ── Pattern-based algorithm changes ───────────────────────────────────
+    if (codeHas(code2, ['left', 'lo', 'start']) && codeHas(code2, ['right', 'hi', 'end']) && !codeHas(code1, ['left', 'lo'])) {
+        labels.push('Added Two Pointers');
+    }
+    if (codeHas(code2, ['mid', 'low', 'high']) && codeHas(code2, 'while') && !codeHas(code1, 'mid')) {
+        labels.push('Added Binary Search Logic');
+    }
+    if ((codeHas(code2, 'memo') || codeHas(code2, 'dp[') || codeHas(code2, '@lru_cache')) && !codeHas(code1, ['memo', 'dp[', '@lru_cache'])) {
+        labels.push('Added Memoization');
+    }
+
+    // ── Size-based fallback ──────────────────────────────────────────────
+    if (labels.length === 0) {
+        if (ops.length <= 3) labels.push('Minor Optimization');
+        else if (ops.length <= 10) labels.push('Code Refactor');
+        else labels.push('Algorithmic Restructure');
+    }
+
+    return labels;
+}
+
 // ─── Unified label() Entry Point ──────────────────────────────────────────────
 
 /**
  * Label a code transformation.
  *
- * Tries the rule engine first; falls back to Gemini + Redis cache.
+ * Tries the rule engine first; falls back to smart description.
  *
  * @param  {Array}   ops   - extractOps output from treeDiff.diff()
  * @param  {string}  code1 - previous submission code
@@ -353,7 +422,7 @@ async function label(ops, code1, code2, lang, hash1 = null, hash2 = null) {
         }
     }
 
-    // ── 3. Gemini fallback ─────────────────────────────────────────────────
+    // ── 3. Gemini fallback (only if API key is available and working) ──────
     try {
         const { classifyWithCache } = require('./geminiLabeler');
         const ai = await classifyWithCache(code1, code2, lang, hash1, hash2);
@@ -364,9 +433,13 @@ async function label(ops, code1, code2, lang, hash1 = null, hash2 = null) {
             explanation: ai.explanation,
         };
     } catch (e) {
-        console.error('[Labeler] Gemini fallback failed:', e.message);
-        return { labels: ['Unknown Change'], source: 'rule', confidence: 0 };
+        console.warn('[Labeler] Gemini unavailable, using smart fallback:', e.message);
     }
+
+    // ── 4. Smart fallback — NEVER returns "Unknown Change" ────────────────
+    const fallbackLabels = describeFallback(ops, code1, code2);
+    return { labels: fallbackLabels, source: 'fallback', confidence: 0.6 };
 }
 
-module.exports = { applyRules, label, rules };
+module.exports = { applyRules, label, rules, describeFallback };
+
