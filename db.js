@@ -148,9 +148,25 @@ const FavouriteProblem = sequelize.define("FavouriteProblem", {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true }
 });
 
+// Composite index on (userId, createdAt) makes the calendar aggregation query fast —
+// Postgres does an index scan instead of a full table scan for each profile load.
+const Activity = sequelize.define('Activity', {
+    id:           { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    userId:       { type: DataTypes.UUID, allowNull: false },
+    type:         { type: DataTypes.STRING, defaultValue: "submission" },
+    submissionId: { type: DataTypes.UUID, allowNull: true },
+}, {
+    indexes: [
+        { name: "activity_userid_createdat_idx", fields: ["userId", "createdAt"] }
+    ]
+});
+
 // Relationships
 User.hasMany(Submission, { foreignKey: "userId" });
 Submission.belongsTo(User, { foreignKey: "userId" });
+
+User.hasMany(Activity, { foreignKey: "userId" });
+Activity.belongsTo(User, { foreignKey: "userId" });
 
 Problem.hasMany(TestCase, { foreignKey: "problemId" });
 TestCase.belongsTo(Problem, { foreignKey: "problemId" });
@@ -180,6 +196,7 @@ module.exports = {
     TransformationLabel,
     HintQuery,
     Topic,
-UserProblem,
-FavouriteProblem,
+    UserProblem,
+    FavouriteProblem,
+    Activity,
 };

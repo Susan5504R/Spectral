@@ -35,6 +35,10 @@ const submissionQueue = new Queue("python-codes", {
 const anticheatQueue = new Queue("anticheat", {
     connection: { host: REDIS_HOST, port: REDIS_PORT },
 });
+
+const activityRouter = require("./routes/activity");
+app.use("/activity", activityRouter);
+
 app.get("/problems", authenticateToken, async (req, res) => {
     try {
         const { search, difficulty, topic } = req.query;
