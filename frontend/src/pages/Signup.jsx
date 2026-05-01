@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useState } from "react";
+import api from "../api/axiosInstance";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -25,29 +26,11 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          username, 
-          password 
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Registration failed");
-      }
-
-      // Success: Redirect to login
+      await api.post("/register", { username, password });
       alert("Account created successfully!");
       navigate("/login");
-      
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.error || err.message || "Registration failed");
     } finally {
       setLoading(false);
     }

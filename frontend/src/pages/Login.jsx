@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useState } from "react";
+import api from "../api/axiosInstance";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -17,27 +18,11 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
-      }
-
-      // Store the JWT token in localStorage
+      const { data } = await api.post("/login", { username, password });
       localStorage.setItem("token", data.token);
-
-      // Redirect to the problems page
       navigate("/");
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.error || err.message || "Login failed");
     } finally {
       setLoading(false);
     }
