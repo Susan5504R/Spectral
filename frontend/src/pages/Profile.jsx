@@ -305,6 +305,7 @@ export default function Profile() {
           <ActivityCalendar
             userId={user.id}
             token={localStorage.getItem("token")}
+            apiBase={import.meta.env.VITE_API_URL || "http://localhost:5000"}
           />
         </motion.div>
 
