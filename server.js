@@ -6,8 +6,12 @@ const { v4: uuidv4 } = require("uuid");
 const { Submission } = require("./db");
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true
+}));
 
 // Connect using environment variables for Docker networking
 const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1";

@@ -1,14 +1,17 @@
+require('dotenv').config();
 const { Sequelize, DataTypes } = require("sequelize");
 
-const dbHost = process.env.DB_HOST || "127.0.0.1";
-const defaultDbPort = dbHost === "127.0.0.1" || dbHost === "localhost" ? 5433 : 5432;
+// Check if the variable exists first to avoid the TypeError
+if (!process.env.DATABASE_URL) {
+    console.error("ERROR: DATABASE_URL is not defined in your .env file!");
+    process.exit(1);
+}
 
-const sequelize = new Sequelize('postgres', 'postgres', 'mysecretpassword', {
-    host: dbHost,
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
-    port: Number(process.env.DB_PORT || defaultDbPort),
-    logging: false
+    logging: false,
 });
+
 const Submission = sequelize.define("Submission", {
     id: { type: DataTypes.UUID, primaryKey: true },
     code: { type: DataTypes.TEXT, allowNull: false },
@@ -41,13 +44,17 @@ const PlagiarismCheck = sequelize.define('PlagiarismCheck', {
     verdict:       { type: DataTypes.STRING, defaultValue: 'pending' }
 });
 
-sequelize.sync({ alter: true }).catch(err => {
-    // Ignore "column already exists" errors from concurrent container startup race
-    if (err.original && err.original.code === '42701') {
-        console.log('[DB] Tables already up to date.');
-    } else {
-        console.error('[DB] Sync error:', err.message);
+const initDB = async () => {
+    try {
+        await sequelize.authenticate();
+        console.log('[DB] Connected successfully.');
+        await sequelize.sync({ alter: true });
+        console.log('[DB] Sync complete.');
+    } catch (err) {
+        console.error('[DB] Connection/Sync error:', err.message);
     }
-});
+};
+
+initDB();
 
 module.exports = { sequelize, Submission, ASTFingerprint, PlagiarismCheck };
