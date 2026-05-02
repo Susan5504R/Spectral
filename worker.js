@@ -39,11 +39,11 @@ function classifyError(err, msg) {
 
 async function runExecutor(language, filepath, inputPath) {
     switch (language) {
-        case "cpp":    return executeCpp(filepath, inputPath);
-        case "c":      return executeC(filepath, inputPath);
+        case "cpp": return executeCpp(filepath, inputPath);
+        case "c": return executeC(filepath, inputPath);
         case "python": return executePython(filepath, inputPath);
-        case "java":   return executeJava(filepath, inputPath);
-        default:       throw new Error("Language not supported");
+        case "java": return executeJava(filepath, inputPath);
+        default: throw new Error("Language not supported");
     }
 }
 
@@ -69,13 +69,19 @@ async function startWorker() {
             filepath = await generateFile(ext, code);
 
             const testCases = problemId
-                ? await TestCase.findAll({ where: { problemId } })
+                ? await TestCase.findAll({ 
+                    where: job.data.runType === "run" ? { problemId, isHidden: false } : { problemId } 
+                })
                 : [];
 
             if (testCases.length > 0) {
                 // Multi-test-case mode: judge against all DB test cases
-                status = "Accepted";
-                for (const tc of testCases) {
+                const testResults = [];
+                let passCount = 0;
+                let shortCircuit = false;
+
+                for (let i = 0; i < testCases.length; i++) {
+                    const tc = testCases[i];
                     let inputPath;
                     try {
                         inputPath = await generateInputFile(tc.input);
@@ -84,31 +90,52 @@ async function startWorker() {
                         peakMemory = Math.max(peakMemory, result.memory);
                         finalOutput = result.output;
 
-                        if (normalize(result.output) !== normalize(tc.expectedOutput)) {
-                            status = "Wrong Answer";
-                            failedTestCase = {
-                                input: tc.input,
-                                expected: tc.expectedOutput,
-                                actual: result.output,
-                                isHidden: tc.isHidden
-                            };
-                            break;
-                        }
+                        const passed = normalize(result.output) === normalize(tc.expectedOutput);
+                        if (passed) passCount++;
+
+                        testResults.push({
+                            index: i + 1,
+                            passed,
+                            input: tc.isHidden ? null : tc.input,
+                            expected: tc.isHidden ? null : tc.expectedOutput,
+                            actual: tc.isHidden ? null : result.output,
+                            isHidden: tc.isHidden
+                        });
                     } catch (err) {
                         errorMsg = err.message || "Unknown error";
-                        status = classifyError(err, errorMsg);
+                        const errStatus = classifyError(err, errorMsg);
                         capturedError = err;
-                        failedTestCase = {
-                            input: tc.input,
-                            expected: tc.expectedOutput,
-                            actual: errorMsg,
-                            isHidden: tc.isHidden
-                        };
-                        break;
+
+                        testResults.push({
+                            index: i + 1,
+                            passed: false,
+                            input: tc.isHidden ? null : tc.input,
+                            expected: tc.isHidden ? null : tc.expectedOutput,
+                            actual: tc.isHidden ? null : errorMsg,
+                            isHidden: tc.isHidden,
+                            error: errStatus
+                        });
+
+                        // Short-circuit on compilation errors or TLE
+                        if (errStatus === "Compilation Error" || errStatus === "Time Limit Exceeded") {
+                            status = errStatus;
+                            shortCircuit = true;
+                            break;
+                        }
                     } finally {
                         if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
                     }
                 }
+
+                if (!shortCircuit) {
+                    status = passCount === testCases.length ? "Accepted" : "Wrong Answer";
+                }
+
+                failedTestCase = {
+                    total: testCases.length,
+                    passed: passCount,
+                    results: testResults
+                };
             } else {
                 // Single-run mode: use job-embedded input / expectedOutput
                 let inputPath;
@@ -144,14 +171,20 @@ async function startWorker() {
         }
 
         console.log(`[JOB ${job.id}] Time: ${totalTime.toFixed(2)} ms | Memory: ${peakMemory.toFixed(2)} MB | STATUS: ${status}`);
-        
-        if (status !== "Accepted" && status !== "Pending" && failedTestCase) {
-            console.log("\n--- FAILURE DETAILS ---");
-            console.log(`Type:     ${failedTestCase.isHidden ? 'HIDDEN' : 'PUBLIC'}`);
-            console.log(`Input:    ${failedTestCase.input}`);
-            console.log(`Expected: ${failedTestCase.expected}`);
-            console.log(`Actual:   ${failedTestCase.actual}`);
-            console.log("-----------------------\n");
+
+        if (failedTestCase && failedTestCase.results) {
+            console.log(`\n--- TEST RESULTS: ${failedTestCase.passed}/${failedTestCase.total} Passed ---`);
+            for (const r of failedTestCase.results) {
+                if (!r.passed) {
+                    console.log(`  TC #${r.index} [${r.isHidden ? 'HIDDEN' : 'PUBLIC'}]: FAILED`);
+                    if (!r.isHidden) {
+                        console.log(`    Input:    ${r.input}`);
+                        console.log(`    Expected: ${r.expected}`);
+                        console.log(`    Actual:   ${r.actual}`);
+                    }
+                }
+            }
+            console.log("---\n");
         }
 
         if (errorMsg && (status === "Compilation Error" || status === "Runtime Error")) {
@@ -194,7 +227,7 @@ async function startWorker() {
                     storeFingerprint(submissionId, code, language, problemId, userId)
                         .then(() => anticheatQueue.add('check', { submissionId, problemId, language, userId }))
                         .catch(e => console.error(`[JOB ${job.id}] Fingerprint error:`, e.message));
-                        
+
                     evolutionQueue.add('process', { submissionId, problemId, language })
                         .catch(e => console.error(`[JOB ${job.id}] Evolution queue error:`, e.message));
                 }

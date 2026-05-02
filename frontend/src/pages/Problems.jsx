@@ -84,30 +84,44 @@ export default function Problems() {
         </div>
       </div>
 
-      <div className="bg-slate-900/50 rounded-xl border border-slate-800">
-        <div className="grid grid-cols-12 p-4 text-slate-500 text-xs font-bold uppercase">
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden backdrop-blur-sm">
+        <div className="grid grid-cols-12 p-4 text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-800 bg-slate-900/80">
           <div className="col-span-1">Status</div>
-          <div className="col-span-7">Title</div>
+          <div className="col-span-5">Title</div>
+          <div className="col-span-2">Topic</div>
           <div className="col-span-2">Difficulty</div>
           <div className="col-span-2 text-right">Favorite</div>
         </div>
 
         {loading ? (
-           <div className="p-10 text-center text-slate-500">Loading problems...</div>
+           <div className="p-20 text-center text-slate-500">
+             <div className="inline-block w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+             <p className="text-sm font-medium animate-pulse">Loading problems...</p>
+           </div>
+        ) : problems.length === 0 ? (
+          <div className="p-20 text-center text-slate-500">
+            <Search className="mx-auto mb-4 opacity-20" size={48} />
+            <p className="text-sm">No problems found matching your criteria.</p>
+          </div>
         ) : problems.map((p) => (
           <div
             key={p.id}
             onClick={() => navigate(`/problem/${p.id}`)}
-            className="grid grid-cols-12 p-4 items-center border-t border-slate-800 hover:bg-slate-800/50 cursor-pointer transition"
+            className="grid grid-cols-12 p-4 items-center border-b last:border-0 border-slate-800 hover:bg-white/[0.02] cursor-pointer transition-colors group"
           >
-            <div className="col-span-1">{p.solved ? "✅" : "—"}</div>
-            <div className="col-span-7 font-medium">{p.title}</div>
-            <div className={`col-span-2 text-sm ${
+            <div className="col-span-1 text-lg">{p.solved ? "✅" : "—"}</div>
+            <div className="col-span-5 font-medium group-hover:text-blue-400 transition-colors">{p.title}</div>
+            <div className="col-span-2">
+              <span className="text-[10px] px-2 py-1 rounded-md bg-slate-800 text-slate-400 font-semibold uppercase tracking-tight">
+                {p.topics?.[0] || "General"}
+              </span>
+            </div>
+            <div className={`col-span-2 text-sm font-semibold ${
               p.difficulty === 'Easy' ? 'text-emerald-400' : p.difficulty === 'Medium' ? 'text-amber-400' : 'text-rose-400'
             }`}>{p.difficulty}</div>
             <div className="col-span-2 text-right">
-              <button onClick={(e) => toggleFavorite(e, p.id, p.favourite)}>
-                <Star size={20} fill={p.favourite ? "#eab308" : "none"} className={p.favourite ? "text-yellow-500" : "text-slate-500"} />
+              <button onClick={(e) => toggleFavorite(e, p.id, p.favourite)} className="hover:scale-110 transition-transform">
+                <Star size={18} fill={p.favourite ? "#eab308" : "none"} className={p.favourite ? "text-yellow-500" : "text-slate-500 opacity-40 group-hover:opacity-100"} />
               </button>
             </div>
           </div>

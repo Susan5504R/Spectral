@@ -1,12 +1,5 @@
-require("dotenv").config();
-
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "LOADED" : "NOT LOADED");
 const express = require("express");
 const cors = require("cors");
-const crypto = require("crypto");
-const nodemailer = require("nodemailer");
-const { Op } = require("sequelize");
 const { Queue } = require("bullmq");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
@@ -24,7 +17,6 @@ const {
     ExecutionMetrics
 } = require("./db");
 // const { User, Submission, Problem, TestCase, PlagiarismCheck } = require("./db");
-console.log("🔥 NEW SERVER WITH FORGOT PASSWORD ROUTE LOADED");
 const { authenticateToken, SECRET } = require("./auth");
 const graphClient = require('./graph/client');
 const { getOrGenerateHint } = require('./graph/hintEngine');
@@ -32,51 +24,7 @@ const { getOrGenerateHint } = require('./graph/hintEngine');
 const app = express();
 app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", credentials: true }));
 app.use(express.json());
-app.get("/test", (req, res) => {
-    res.json({ message: "server is correct" });
-});
-app.post("/forgot-password", async (req, res) => {
-    try {
-        const { email } = req.body;
 
-        console.log("Forgot password email:", email); // debug
-
-        const user = await User.findOne({ where: { email } });
-
-        if (!user) {
-            return res.status(404).json({ error: "No user found with this email" });
-        }
-
-        const token = crypto.randomBytes(32).toString("hex");
-
-        user.resetToken = token;
-        user.resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000);
-        await user.save();
-
-        const transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            }
-        });
-
-        const resetLink = `http://localhost:5173/reset-password/${token}`;
-
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: email,
-            subject: "Reset Password",
-            html: `<p>Click to reset password:</p><a href="${resetLink}">${resetLink}</a>`
-        });
-
-        res.json({ message: "Reset email sent" });
-
-    } catch (err) {
-        console.error("FORGOT PASSWORD ERROR:", err);
-        res.status(500).json({ error: err.message });
-    }
-});
 const REDIS_HOST = process.env.REDIS_HOST || "localhost";
 const REDIS_PORT = Number(process.env.REDIS_PORT || 6379);
 
@@ -87,10 +35,6 @@ const submissionQueue = new Queue("python-codes", {
 const anticheatQueue = new Queue("anticheat", {
     connection: { host: REDIS_HOST, port: REDIS_PORT },
 });
-
-const activityRouter = require("./routes/activity");
-app.use("/activity", activityRouter);
-
 app.get("/problems", authenticateToken, async (req, res) => {
     try {
         const { search, difficulty, topic } = req.query;
@@ -230,7 +174,7 @@ app.get("/problems/:id/submissions", authenticateToken, async (req, res) => {
 });
 app.post("/run", authenticateToken, async (req, res) => {
     try {
-        const { code, language, input } = req.body;
+        const { code, language, input, problemId } = req.body;
         const submissionId = uuidv4();
 
         await Submission.create({
@@ -238,6 +182,7 @@ app.post("/run", authenticateToken, async (req, res) => {
             code,
             language: language || "cpp",
             input,
+            problemId: problemId || null,
             userId: req.user.id,
             status: "Pending"
         });
@@ -247,7 +192,9 @@ app.post("/run", authenticateToken, async (req, res) => {
             code,
             language: language || "cpp",
             input,
-            userId: req.user.id
+            problemId: problemId || null,
+            userId: req.user.id,
+            runType: "run"
         });
 
         res.status(202).json({
@@ -379,7 +326,7 @@ app.get("/status/:id", authenticateToken, async (req, res) => {
     try {
         const submission = await Submission.findByPk(req.params.id);
         if (!submission) return res.status(404).json({ error: "Submission not found" });
-        
+
         // Ownership check
         if (submission.userId !== req.user.id) {
             return res.status(403).json({ error: "Access denied. You can only view your own submissions." });
@@ -410,23 +357,20 @@ app.get("/status/:id", authenticateToken, async (req, res) => {
 // });
 app.post("/register", async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { username, password } = req.body;
 
-        const existingUser = await User.findOne({
-            where: {
-                [Op.or]: [{ username }, { email }]
-            }
-        });
+        console.log("Register body:", req.body);
+
+        const existingUser = await User.findOne({ where: { username } });
 
         if (existingUser) {
-            return res.status(400).json({ error: "Username or Email already exists" });
+            return res.status(400).json({ error: "Username already exists" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = await User.create({
             username,
-            email,
             password: hashedPassword
         });
 
@@ -436,69 +380,10 @@ app.post("/register", async (req, res) => {
         });
 
     } catch (err) {
+        console.error("REGISTER ERROR:", err);
         res.status(500).json({ error: err.message });
     }
 });
-
-
-app.post("/reset-password/:token", async (req, res) => {
-    try {
-        const { token } = req.params;
-        const { newPassword } = req.body;
-
-        const user = await User.findOne({
-            where: {
-                resetToken: token,
-                resetTokenExpiry: {
-                    [Op.gt]: new Date()
-                }
-            }
-        });
-
-        if (!user) return res.status(400).json({ error: "Invalid or expired token" });
-
-        user.password = await bcrypt.hash(newPassword, 10);
-        user.resetToken = null;
-        user.resetTokenExpiry = null;
-
-        await user.save();
-
-        res.json({ message: "Password reset successful" });
-
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// app.post("/register", async (req, res) => {
-//     try {
-//         const { username, password } = req.body;
-
-//         console.log("Register body:", req.body);
-
-//         const existingUser = await User.findOne({ where: { username } });
-
-//         if (existingUser) {
-//             return res.status(400).json({ error: "Username already exists" });
-//         }
-
-//         const hashedPassword = await bcrypt.hash(password, 10);
-
-//         const user = await User.create({
-//             username,
-//             password: hashedPassword
-//         });
-
-//         res.status(201).json({
-//             message: "User created",
-//             userId: user.id
-//         });
-
-//     } catch (err) {
-//         console.error("REGISTER ERROR:", err);
-//         res.status(500).json({ error: err.message });
-//     }
-// });
 
 app.post("/login", async (req, res) => {
     const { username, password } = req.body;
@@ -510,8 +395,6 @@ app.post("/login", async (req, res) => {
         res.status(401).json({ error: "Invalid credentials" });
     }
 });
-
-
 
 app.post("/submit", authenticateToken, async (req, res) => {
     try {
@@ -532,7 +415,8 @@ app.post("/submit", authenticateToken, async (req, res) => {
             code,
             language: language || "cpp",
             problemId,
-            userId: req.user.id
+            userId: req.user.id,
+            runType: "submit"
         });
 
         return res.status(202).json({ submissionId, jobId: job.id });
@@ -714,7 +598,7 @@ app.get("/graph/stats", async (req, res) => {
     try {
         const nodesQuery = await graphClient.cypher('MATCH (n:CodeState) RETURN count(n) AS nodeCount');
         const edgesQuery = await graphClient.cypher('MATCH ()-[e:TRANSFORMED]->() RETURN count(e) AS edgeCount');
-        
+
         res.json({
             nodeCount: nodesQuery.length ? nodesQuery[0].nodeCount : 0,
             edgeCount: edgesQuery.length ? edgesQuery[0].edgeCount : 0
@@ -724,105 +608,67 @@ app.get("/graph/stats", async (req, res) => {
     }
 });
 
-app.get("/graph/visualize/:problemId", async (req, res) => {
+app.get("/problems/:id/distribution", authenticateToken, async (req, res) => {
     try {
-        const problemId = req.params.problemId;
-        
-        // AGE agtype helper - strip extra quotes from returned strings
-        const strip = (v) => {
-            if (v === null || v === undefined) return null;
-            if (typeof v === 'string') return v.replace(/^"|"$/g, '');
-            return v;
-        };
-        
-        // Safe JSON parse with fallback
-        const safeParseArray = (v) => {
-            try {
-                const s = strip(v);
-                if (!s) return [];
-                const parsed = JSON.parse(s);
-                return Array.isArray(parsed) ? parsed : [parsed];
-            } catch { return []; }
-        };
-        
-        // 1. Fetch nodes with approach and data structure metadata
-        const nodesQuery = `
-            MATCH (n:CodeState) 
-            WHERE n.problemId = '${problemId}'
-            RETURN id(n) AS id, n.hash AS hash, n.accepted AS accepted, n.language AS language, 
-                   n.complexity AS complexity, n.snippet AS snippet, n.approach AS approach,
-                   n.approaches AS approaches, n.dataStructures AS dataStructures
-        `;
-        const nodesRaw = await graphClient.cypher(nodesQuery);
-        
-        // 2. Fetch full submission code from SQL for each hash
-        const { Submission } = require('./db');
-        const allSubs = await Submission.findAll({
-            where: { problemId },
-            attributes: ['id', 'code', 'status', 'language', 'createdAt'],
-            order: [['createdAt', 'ASC']]
-        });
-        
-        const nodes = nodesRaw.map((row, idx) => ({
-            id: String(row.id),
-            data: { 
-                label: strip(row.approach) || `State ${idx + 1}`,
-                hash: strip(row.hash),
-                isSolution: row.accepted === true || strip(row.accepted) === 'true',
-                language: strip(row.language),
-                complexity: strip(row.complexity),
-                snippet: strip(row.snippet),
-                approach: strip(row.approach) || 'Unknown',
-                approaches: safeParseArray(row.approaches),
-                dataStructures: safeParseArray(row.dataStructures),
-                stateNumber: idx + 1
-            },
-            position: { x: 0, y: 0 }
-        }));
+        const { id } = req.params;
+        const { language } = req.query;
 
-        // 3. Fetch edges with full transformation details
-        const edgesQuery = `
-            MATCH (a:CodeState)-[e:TRANSFORMED]->(b:CodeState)
-            WHERE a.problemId = '${problemId}' AND b.problemId = '${problemId}'
-            RETURN id(e) AS id, id(a) AS source, id(b) AS target, e.labels AS labels, 
-                   e.distance AS distance, e.complexityDelta AS complexityDelta, e.source AS labelSource,
-                   e.jaccard AS jaccard, e.weight AS weight
-        `;
-        const edgesRaw = await graphClient.cypher(edgesQuery);
-        
-        const edges = edgesRaw.map(row => {
-            const labels = safeParseArray(row.labels);
-            const labelText = labels.length > 0 ? labels.join(', ') : 'Structural Change';
+        const where = { problemId: id };
+        if (language) where.language = language;
 
-            return {
-                id: String(row.id),
-                source: String(row.source),
-                target: String(row.target),
-                label: labelText,
-                data: {
-                    labels,
-                    distance: strip(row.distance),
-                    complexityDelta: strip(row.complexityDelta),
-                    labelSource: strip(row.labelSource),
-                    jaccard: strip(row.jaccard),
-                    weight: strip(row.weight)
-                },
-                type: 'smoothstep'
-            };
+        const submissions = await Submission.findAll({
+            where,
+            include: [{
+                model: ExecutionMetrics,
+                required: true,
+                attributes: ["execution_time_ms", "memory_used_mb"]
+            }],
+            attributes: ["id", "language"]
         });
 
-        // 4. Include submission timeline for code viewing
-        const timeline = allSubs.map(s => ({
-            id: s.id,
-            status: s.status,
-            language: s.language,
-            code: s.code,
-            createdAt: s.createdAt
-        }));
+        // Binning logic
+        const timeBins = {};
+        const memoryBins = {};
+        const timeBinSize = 10; // 10ms
+        const memoryBinSize = 2; // 2MB
 
-        res.json({ nodes, edges, timeline });
+        submissions.forEach(sub => {
+            const time = sub.ExecutionMetric.execution_time_ms;
+            const memory = sub.ExecutionMetric.memory_used_mb;
+
+            const tBin = Math.floor(time / timeBinSize) * timeBinSize;
+            const mBin = Math.floor(memory / memoryBinSize) * memoryBinSize;
+
+            timeBins[tBin] = (timeBins[tBin] || 0) + 1;
+            memoryBins[mBin] = (memoryBins[mBin] || 0) + 1;
+        });
+
+        // Format for Recharts
+        const formatBins = (bins) => Object.keys(bins)
+            .map(bin => ({ bin: Number(bin), count: bins[bin] }))
+            .sort((a, b) => a.bin - b.bin);
+
+        // Get user's latest submission
+        const userSubmission = await Submission.findOne({
+            where: { problemId: id, userId: req.user.id, status: 'Accepted' },
+            include: [{ model: ExecutionMetrics, required: true }],
+            order: [['createdAt', 'DESC']]
+        });
+
+        res.json({
+            timeDistribution: formatBins(timeBins),
+            memoryDistribution: formatBins(memoryBins),
+            userPerformance: userSubmission ? {
+                time: userSubmission.ExecutionMetric.execution_time_ms,
+                memory: userSubmission.ExecutionMetric.memory_used_mb
+            } : null,
+            allSubmissions: submissions.map(s => ({
+                runtime: s.ExecutionMetric.execution_time_ms,
+                memory: s.ExecutionMetric.memory_used_mb,
+                inputSize: s.ExecutionMetric.input_size
+            }))
+        });
     } catch (err) {
-        console.error("Graph Visualize Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
