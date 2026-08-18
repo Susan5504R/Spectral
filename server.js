@@ -25,7 +25,7 @@ const {
 } = require("./db");
 // const { User, Submission, Problem, TestCase, PlagiarismCheck } = require("./db");
 console.log("🔥 NEW SERVER WITH FORGOT PASSWORD ROUTE LOADED");
-const { authenticateToken, requireAdmin, SECRET } = require("./auth");
+const { authenticateToken, optionalAuth, requireAdmin, SECRET } = require("./auth");
 const graphClient = require('./graph/client');
 const { getOrGenerateHint } = require('./graph/hintEngine');
 
@@ -91,19 +91,22 @@ const anticheatQueue = new Queue("anticheat", {
 const activityRouter = require("./routes/activity");
 app.use("/activity", activityRouter);
 
-app.get("/problems", authenticateToken, async (req, res) => {
+app.get("/problems", optionalAuth, async (req, res) => {
     try {
         const { search, difficulty, topic } = req.query;
         const { Op } = require("sequelize");
 
         const where = {};
-
-        if (search) {
-            where.title = { [Op.iLike]: `%${search}%` };
+        if (difficulty && difficulty !== "All") {
+            where.difficulty = difficulty;
         }
 
-        if (difficulty) {
-            where.difficulty = difficulty;
+        if (search && search.trim() !== "") {
+            const pattern = `%${search.trim()}%`;
+            where[Op.or] = [
+                { title: { [Op.iLike]: pattern } },
+                { "$Topics.name$": { [Op.iLike]: pattern } }
+            ];
         }
 
         const problems = await Problem.findAll({
@@ -111,28 +114,28 @@ app.get("/problems", authenticateToken, async (req, res) => {
             include: [
                 {
                     model: Topic,
-                    where: topic ? { name: topic } : undefined,
-                    required: !!topic
+                    where: topic && topic !== "All" ? { name: topic } : undefined,
+                    required: !!(topic && topic !== "All")
                 }
             ],
-            order: [["createdAt", "DESC"]]
+            subQuery: false,
+            distinct: true,
+            order: [["createdAt", "ASC"]]
         });
 
-        const solvedRows = await UserProblem.findAll({
-            where: {
-                UserId: req.user.id,
-                status: "Solved"
-            }
-        });
+        let solvedSet = new Set();
+        let favouriteSet = new Set();
 
-        const favouriteRows = await FavouriteProblem.findAll({
-            where: {
-                UserId: req.user.id
-            }
-        });
-
-        const solvedSet = new Set(solvedRows.map(row => row.ProblemId));
-        const favouriteSet = new Set(favouriteRows.map(row => row.ProblemId));
+        if (req.user?.id) {
+            const solvedRows = await UserProblem.findAll({
+                where: { UserId: req.user.id, status: "Solved" }
+            });
+            const favouriteRows = await FavouriteProblem.findAll({
+                where: { UserId: req.user.id }
+            });
+            solvedSet = new Set(solvedRows.map(row => row.ProblemId));
+            favouriteSet = new Set(favouriteRows.map(row => row.ProblemId));
+        }
 
         const result = problems.map(problem => ({
             id: problem.id,
@@ -150,7 +153,7 @@ app.get("/problems", authenticateToken, async (req, res) => {
     }
 });
 
-app.get("/problems/:id", authenticateToken, async (req, res) => {
+app.get("/problems/:id", optionalAuth, async (req, res) => {
     try {
         const problem = await Problem.findByPk(req.params.id, {
             include: [
@@ -167,20 +170,17 @@ app.get("/problems/:id", authenticateToken, async (req, res) => {
             return res.status(404).json({ error: "Problem not found" });
         }
 
-        const solved = await UserProblem.findOne({
-            where: {
-                UserId: req.user.id,
-                ProblemId: req.params.id,
-                status: "Solved"
-            }
-        });
+        let solved = false;
+        let favourite = false;
 
-        const favourite = await FavouriteProblem.findOne({
-            where: {
-                UserId: req.user.id,
-                ProblemId: req.params.id
-            }
-        });
+        if (req.user?.id) {
+            solved = !!(await UserProblem.findOne({
+                where: { UserId: req.user.id, ProblemId: req.params.id, status: "Solved" }
+            }));
+            favourite = !!(await FavouriteProblem.findOne({
+                where: { UserId: req.user.id, ProblemId: req.params.id }
+            }));
+        }
 
         res.json({
             id: problem.id,
@@ -193,15 +193,16 @@ app.get("/problems/:id", authenticateToken, async (req, res) => {
                 input: tc.input,
                 output: tc.expectedOutput
             })) || [],
-            solved: !!solved,
-            favourite: !!favourite
+            solved,
+            favourite,
+            hints: problem.hints || []
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.get("/problems/:id/editorial", authenticateToken, async (req, res) => {
+app.get("/problems/:id/editorial", optionalAuth, async (req, res) => {
     try {
         const problem = await Problem.findByPk(req.params.id, {
             attributes: ["id", "editorialDescription", "editorialSolutions"]
@@ -213,24 +214,30 @@ app.get("/problems/:id/editorial", authenticateToken, async (req, res) => {
     }
 });
 
-app.get("/problems/:id/submissions", authenticateToken, async (req, res) => {
+app.get("/problems/:id/submissions", optionalAuth, async (req, res) => {
     try {
+        const whereClause = { problemId: req.params.id };
+        if (req.user?.id) {
+            whereClause[Op.or] = [
+                { userId: req.user.id },
+                { userId: null }
+            ];
+        }
         const submissions = await Submission.findAll({
-            where: {
-                problemId: req.params.id,
-                userId: req.user.id
-            },
+            where: whereClause,
             include: [{ model: ExecutionMetrics, attributes: ["execution_time_ms", "memory_used_mb"] }],
-            order: [["createdAt", "DESC"]]
+            order: [["createdAt", "DESC"]],
+            limit: 30
         });
         res.json(submissions);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-app.post("/run", authenticateToken, async (req, res) => {
+
+app.post("/run", optionalAuth, async (req, res) => {
     try {
-        const { code, language, input } = req.body;
+        const { code, language, input, expectedOutput, problemId } = req.body;
         const submissionId = uuidv4();
 
         await Submission.create({
@@ -238,7 +245,7 @@ app.post("/run", authenticateToken, async (req, res) => {
             code,
             language: language || "cpp",
             input,
-            userId: req.user.id,
+            userId: req.user?.id || null,
             status: "Pending"
         });
 
@@ -247,7 +254,9 @@ app.post("/run", authenticateToken, async (req, res) => {
             code,
             language: language || "cpp",
             input,
-            userId: req.user.id
+            expectedOutput,
+            problemId,
+            userId: req.user?.id || null
         });
 
         res.status(202).json({
@@ -375,13 +384,13 @@ app.put("/me/profile", authenticateToken, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-app.get("/status/:id", authenticateToken, async (req, res) => {
+app.get("/status/:id", optionalAuth, async (req, res) => {
     try {
         const submission = await Submission.findByPk(req.params.id);
         if (!submission) return res.status(404).json({ error: "Submission not found" });
         
         // Ownership check
-        if (submission.userId !== req.user.id) {
+        if (submission.userId && req.user?.id && submission.userId !== req.user.id) {
             return res.status(403).json({ error: "Access denied. You can only view your own submissions." });
         }
         res.json({
@@ -515,7 +524,7 @@ app.post("/login", async (req, res) => {
 
 
 
-app.post("/submit", authenticateToken, async (req, res) => {
+app.post("/submit", optionalAuth, async (req, res) => {
     try {
         const { code, language, problemId } = req.body;
         const submissionId = uuidv4();
@@ -525,7 +534,7 @@ app.post("/submit", authenticateToken, async (req, res) => {
             code,
             language: language || "cpp",
             problemId,
-            userId: req.user.id,
+            userId: req.user?.id || null,
             status: "Pending"
         });
 
@@ -534,7 +543,7 @@ app.post("/submit", authenticateToken, async (req, res) => {
             code,
             language: language || "cpp",
             problemId,
-            userId: req.user.id
+            userId: req.user?.id || null
         });
 
         return res.status(202).json({ submissionId, jobId: job.id });
@@ -818,6 +827,94 @@ app.get("/graph/visualize/:problemId", async (req, res) => {
             code: s.code,
             createdAt: s.createdAt
         }));
+
+        if (nodes.length === 0) {
+            const defaultNodes = [
+                {
+                    id: "n1",
+                    data: {
+                        label: "Brute Force Iteration",
+                        hash: "bf_001",
+                        isSolution: false,
+                        language: "cpp",
+                        complexity: "O(N^2)",
+                        snippet: "for(int i=0; i<n; i++) {\n  for(int j=i+1; j<n; j++) {\n    if(check(arr[i], arr[j])) return;\n  }\n}",
+                        approach: "Brute Force",
+                        approaches: ["Brute Force", "Nested Loop"],
+                        dataStructures: ["Array"],
+                        stateNumber: 1
+                    },
+                    position: { x: 0, y: 0 }
+                },
+                {
+                    id: "n2",
+                    data: {
+                        label: "Hash Table Optimization",
+                        hash: "ht_002",
+                        isSolution: true,
+                        language: "cpp",
+                        complexity: "O(N)",
+                        snippet: "unordered_map<int, int> mp;\nfor(int i=0; i<n; i++) {\n  if(mp.count(target - arr[i])) return;\n  mp[arr[i]] = i;\n}",
+                        approach: "Hash Map Lookup",
+                        approaches: ["Hash Map", "One Pass"],
+                        dataStructures: ["HashMap", "Array"],
+                        stateNumber: 2
+                    },
+                    position: { x: 0, y: 0 }
+                },
+                {
+                    id: "n3",
+                    data: {
+                        label: "Two-Pointer Optimization",
+                        hash: "opt_003",
+                        isSolution: true,
+                        language: "cpp",
+                        complexity: "O(N log N)",
+                        snippet: "sort(arr.begin(), arr.end());\nint l = 0, r = n - 1;\nwhile(l < r) {\n  int sum = arr[l] + arr[r];\n  if(sum == target) return;\n  else if(sum < target) l++;\n  else r--;\n}",
+                        approach: "Two Pointers",
+                        approaches: ["Sorting", "Two Pointers"],
+                        dataStructures: ["Sorting", "Array"],
+                        stateNumber: 3
+                    },
+                    position: { x: 0, y: 0 }
+                }
+            ];
+
+            const defaultEdges = [
+                {
+                    id: "e1-2",
+                    source: "n1",
+                    target: "n2",
+                    label: "Replaced Nested Loops with HashMap",
+                    data: {
+                        labels: ["Replaced Nested Loops with HashMap"],
+                        distance: "12",
+                        complexityDelta: "-1",
+                        labelSource: "Rule Engine",
+                        jaccard: "0.85",
+                        weight: "1"
+                    },
+                    type: "smoothstep"
+                },
+                {
+                    id: "e2-3",
+                    source: "n2",
+                    target: "n3",
+                    label: "Space-Optimized Two Pointers",
+                    data: {
+                        labels: ["Space-Optimized Two Pointers"],
+                        distance: "8",
+                        complexityDelta: "0",
+                        labelSource: "Rule Engine",
+                        jaccard: "0.92",
+                        weight: "1"
+                    },
+                    type: "smoothstep"
+                }
+            ];
+
+            return res.json({ nodes: defaultNodes, edges: defaultEdges, timeline });
+        }
 
         res.json({ nodes, edges, timeline });
     } catch (err) {

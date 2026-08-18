@@ -1,14 +1,171 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-body {
-  font-family: 'Inter', sans-serif;
+
+@layer base {
+  html {
+    color-scheme: dark light;
+  }
+
+  /* Dark mode is the BASE.
+     Tailwind dark: variant activates when .light is on html (inverted strategy).
+     So dark: classes = light-mode overrides. */
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    @apply bg-surface-darker text-warm-text;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .light body {
+    @apply bg-sunset-50 text-surface-darker;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
 }
-.color-empty {
-  fill: #1e293b;
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.color-scale-1 { fill: #1d4ed8; }
-.color-scale-2 { fill: #2563eb; }
-.color-scale-3 { fill: #3b82f6; }
-.color-scale-4 { fill: #60a5fa; }
-.color-scale-5 { fill: #93c5fd; }
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 142, 83, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 107, 107, 0.5);
+}
+
+/* ─── Neomorphic Design System ─── */
+
+/* Raised neomorphic panel (replaces glass-panel) */
+.neo-panel {
+  @apply bg-surface-dark border border-surface-border text-warm-text rounded-2xl;
+  box-shadow: 6px 6px 14px #12122a, -6px -6px 14px #24243e;
+}
+
+.light .neo-panel {
+  @apply bg-white border-sunset-200 text-surface-darker;
+  box-shadow: 6px 6px 14px #E8DFD3, -6px -6px 14px #FFFFFF;
+}
+
+/* Hover effect for neomorphic panels */
+.neo-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.neo-hover:hover {
+  @apply border-sunset-500/40;
+  box-shadow: 0 0 24px -4px rgba(255, 107, 107, 0.2), 6px 6px 14px #12122a, -6px -6px 14px #24243e;
+  transform: translateY(-3px);
+}
+.light .neo-hover:hover {
+  box-shadow: 0 0 24px -4px rgba(255, 107, 107, 0.15), 6px 6px 14px #E8DFD3, -6px -6px 14px #FFFFFF;
+}
+
+/* Inset neomorphic surface */
+.neo-inset {
+  @apply bg-surface-darker border border-surface-border;
+  box-shadow: inset 3px 3px 8px #12122a, inset -3px -3px 8px #24243e;
+}
+.light .neo-inset {
+  @apply bg-sunset-50 border-sunset-200;
+  box-shadow: inset 3px 3px 8px #E8DFD3, inset -3px -3px 8px #FFFFFF;
+}
+
+/* Neomorphic button style */
+.neo-btn {
+  @apply rounded-xl font-bold transition-all;
+  box-shadow: 3px 3px 8px #12122a, -3px -3px 8px #24243e;
+}
+.neo-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px -4px rgba(255, 107, 107, 0.3), 4px 4px 10px #12122a, -4px -4px 10px #24243e;
+}
+.neo-btn:active {
+  transform: translateY(0);
+  box-shadow: inset 2px 2px 6px #12122a, inset -2px -2px 6px #24243e;
+}
+.light .neo-btn {
+  box-shadow: 3px 3px 8px #E8DFD3, -3px -3px 8px #FFFFFF;
+}
+.light .neo-btn:hover {
+  box-shadow: 0 0 16px -4px rgba(255, 107, 107, 0.2), 4px 4px 10px #E8DFD3, -4px -4px 10px #FFFFFF;
+}
+
+/* Gradient Text — Warm Sunset */
+.gradient-text {
+  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 50%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.light .gradient-text {
+  background: linear-gradient(135deg, #E85D45 0%, #D97729 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Warm Glow Effects */
+.glow-coral  { box-shadow: 0 0 24px -4px rgba(255, 107, 107, 0.4); }
+.glow-orange { box-shadow: 0 0 24px -4px rgba(255, 142, 83, 0.4); }
+.glow-gold   { box-shadow: 0 0 24px -4px rgba(245, 158, 11, 0.4); }
+
+@keyframes warmPulseGlow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+.animate-warm-glow { animation: warmPulseGlow 3s infinite ease-in-out; }
+
+/* Warm gradient spinner */
+@keyframes warmGradientSpin {
+  0% { border-color: #FF6B6B transparent transparent transparent; }
+  25% { border-color: #FF8E53 transparent transparent transparent; }
+  50% { border-color: #F59E0B transparent transparent transparent; }
+  75% { border-color: #FF8E53 transparent transparent transparent; }
+  100% { border-color: #FF6B6B transparent transparent transparent; }
+}
+
+/* Resizable panel handles */
+.resize-handle {
+  @apply bg-surface-border transition-colors;
+  width: 5px; min-width: 5px; flex-shrink: 0; cursor: col-resize;
+}
+.resize-handle:hover { background: #FF6B6B; }
+.light .resize-handle { @apply bg-sunset-200; }
+.light .resize-handle:hover { background: #E85D45; }
+.resize-handle:active { background: #FF6B6B; }
+
+.resize-handle-h {
+  @apply bg-surface-border transition-colors;
+  height: 5px; min-height: 5px; flex-shrink: 0; cursor: row-resize;
+}
+.resize-handle-h:hover { background: #FF6B6B; }
+.light .resize-handle-h { @apply bg-sunset-200; }
+.light .resize-handle-h:hover { background: #E85D45; }
+.resize-handle-h:active { background: #FF6B6B; }
+
+/* Legacy glass-panel alias → neo-panel (backwards compat) */
+.glass-panel {
+  @apply bg-surface-dark border border-surface-border text-warm-text;
+  box-shadow: 6px 6px 14px #12122a, -6px -6px 14px #24243e;
+}
+.light .glass-panel {
+  @apply bg-white border-sunset-200 text-surface-darker;
+  box-shadow: 6px 6px 14px #E8DFD3, -6px -6px 14px #FFFFFF;
+}
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-panel-hover:hover {
+  @apply border-sunset-500/40;
+  box-shadow: 0 0 24px -4px rgba(255, 107, 107, 0.2), 6px 6px 14px #12122a, -6px -6px 14px #24243e;
+  transform: translateY(-3px);
+}

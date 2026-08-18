@@ -1,173 +1,142 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import Navbar from "../components/Navbar";
+import {
+  Cpu, Zap, ShieldCheck, GitBranch, ArrowRight, Code2,
+  Terminal, Sparkles, CheckCircle2, Layers, Server
+} from "lucide-react";
 
 export default function Home() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem("token");
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+  const stagger = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.1 } }
+  };
 
-      try {
-        const response = await fetch("http://localhost:5000/me/profile", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          // Based on your backend: res.json({ user, stats: {...} })
-          setUser(data.user);
-        } else {
-          // Token might be expired
-          localStorage.removeItem("token");
-        }
-      } catch (err) {
-        console.error("Failed to fetch profile:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    navigate("/");
+  const fadeUp = {
+    hidden: { opacity: 0, y: 30 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col overflow-hidden">
-      {/* Navbar */}
-      <div className="flex justify-between items-center px-8 py-4 border-b border-slate-700 z-20">
-        <h1 
-          className="text-xl font-semibold tracking-wide cursor-pointer" 
-          onClick={() => navigate("/")}
-        >
-          Code Engine
-        </h1>
-
-        <div className="flex gap-4 items-center">
-          {!loading && (
-            <>
-              {user ? (
-                /* Authenticated View */
-                <>
-                  <span className="text-slate-400 mr-2">
-                    Hi, <span className="text-white font-medium">{user.username}</span>
-                  </span>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate("/profile")}
-                    className="px-4 py-1.5 rounded-md border border-slate-500 hover:border-blue-500 hover:text-blue-400 transition"
-                  >
-                    Profile
-                  </motion.button>
-                  <button
-                    onClick={handleLogout}
-                    className="text-slate-400 hover:text-red-400 text-sm transition"
-                  >
-                    Logout
-                  </button>
-                </>
-              ) : (
-                /* Guest View */
-                <>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate("/login")}
-                    className="px-4 py-1.5 rounded-md border border-slate-500 hover:border-blue-500 hover:text-blue-400 transition"
-                  >
-                    Login
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate("/signup")}
-                    className="px-4 py-1.5 rounded-md border border-slate-500 hover:border-blue-500 hover:text-blue-400 transition"
-                  >
-                    Sign Up
-                  </motion.button>
-                </>
-              )}
-            </>
-          )}
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigate("/problems")}
-            className="bg-blue-600 px-4 py-1.5 rounded-md hover:bg-blue-700 transition shadow-md shadow-blue-500/20"
-          >
-            Start Solving
-          </motion.button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-surface-darker dark:bg-sunset-50 text-warm-text dark:text-surface-darker flex flex-col selection:bg-sunset-500/30">
+      <Navbar />
 
       {/* Hero Section */}
-      <div className="flex flex-col items-center justify-center text-center flex-1 px-6 relative">
-        <div className="absolute w-[500px] h-[500px] bg-blue-600 opacity-20 blur-3xl rounded-full"></div>
+      <section className="relative overflow-hidden pt-16 pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex-1 flex flex-col justify-center">
+        {/* Ambient Glows */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-sunset-500/20 to-sunset-400/15 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-gradient-to-bl from-warm-gold/10 to-sunset-500/10 blur-[100px] rounded-full pointer-events-none" />
 
-        <motion.h1
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="text-5xl md:text-6xl font-bold mb-6 leading-tight z-10"
+        <motion.div
+          variants={stagger}
+          initial="hidden"
+          animate="show"
+          className="text-center relative z-10 space-y-8 max-w-4xl mx-auto"
         >
-          Master <span className="text-blue-500">DSA</span> Like a Pro
-        </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="text-slate-400 max-w-xl mb-8 text-lg z-10"
-        >
-          Practice coding problems, track your growth, and level up your problem-solving skills.
-        </motion.p>
-
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => navigate("/problems")}
-          className="bg-blue-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 shadow-lg shadow-blue-500/30 z-10"
-        >
-          {user ? "Continue Solving →" : "Start Solving →"}
-        </motion.button>
-      </div>
-
-      {/* Features */}
-      <div className="grid md:grid-cols-3 gap-6 px-10 pb-16 z-10">
-        {[
-          { title: "Track Progress", desc: "Monitor solved problems and growth." },
-          { title: "Smart Practice", desc: "Easy, Medium, Hard problems." },
-          { title: "Instant Execution", desc: "Run code with real-time results." },
-        ].map((item, i) => (
+          {/* Top Pill Badge */}
           <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.2 }}
-            whileHover={{ y: -5 }}
-            className="bg-slate-800/60 backdrop-blur-md p-6 rounded-xl border border-slate-700 hover:border-blue-500 transition"
+            variants={fadeUp}
+            className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-surface-dark/90 dark:bg-sunset-50 border border-sunset-500/30 text-sunset-400 text-xs font-semibold neo-btn"
           >
-            <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
-            <p className="text-slate-400 text-sm">{item.desc}</p>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>High-Performance Distributed Code Execution Engine</span>
           </motion.div>
-        ))}
-      </div>
+
+          {/* Main Title */}
+          <motion.h1
+            variants={fadeUp}
+            className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-tight"
+          >
+            Execute Code with{" "}
+            <span className="bg-gradient-to-r from-sunset-500 via-sunset-400 to-warm-gold bg-clip-text text-transparent">
+              Zero Latency & Hard Sandbox Isolation
+            </span>
+          </motion.h1>
+
+          {/* Subtitle */}
+          <motion.p
+            variants={fadeUp}
+            className="text-lg sm:text-xl text-warm-muted dark:text-warm-muted-light max-w-2xl mx-auto font-normal leading-relaxed"
+          >
+            Spectral combines BullMQ worker nodes, Docker process sandboxes, AST transformation graphs, and AI anti-cheat analytics to deliver a modern LeetCode-grade platform.
+          </motion.p>
+
+          {/* CTAs */}
+          <motion.div
+            variants={fadeUp}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
+          >
+            <button
+              onClick={() => navigate(token ? "/problems" : "/signup")}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-sunset-500 to-sunset-400 hover:from-sunset-400 hover:to-sunset-300 text-white font-bold text-base shadow-xl shadow-sunset-500/25 transition-all hover:scale-105 flex items-center justify-center space-x-2"
+            >
+              <span>{token ? "Explore Problems" : "Get Started Free"}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => navigate("/graph")}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-surface-dark/80 dark:bg-white hover:bg-surface-raised dark:hover:bg-sunset-50 text-warm-text dark:text-surface-darker font-bold text-base border border-surface-border dark:border-sunset-200 transition-all flex items-center justify-center space-x-2 neo-btn"
+            >
+              <GitBranch className="w-4 h-4 text-sunset-400" />
+              <span>View AST Graph</span>
+            </button>
+          </motion.div>
+        </motion.div>
+
+        {/* Feature Cards Grid */}
+        <motion.div
+          variants={stagger}
+          initial="hidden"
+          animate="show"
+          className="grid md:grid-cols-4 gap-6 pt-20 z-10"
+        >
+          {[
+            {
+              icon: Cpu,
+              color: "text-sunset-500",
+              title: "Docker Isolation",
+              desc: "Untrusted code executes in capped, zero-network container sandboxes."
+            },
+            {
+              icon: Zap,
+              color: "text-warm-gold",
+              title: "BullMQ Distributed Queue",
+              desc: "Guaranteed asynchronous job queueing with Redis backing."
+            },
+            {
+              icon: GitBranch,
+              color: "text-sunset-400",
+              title: "AST Evolution Graph",
+              desc: "Tree-sitter AST hashing to track step-by-step student problem solving."
+            },
+            {
+              icon: ShieldCheck,
+              color: "text-emerald-400",
+              title: "AI Anti-Cheat System",
+              desc: "Jaccard & Gemini LLM plagiarism detection across submissions."
+            }
+          ].map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <motion.div
+                key={i}
+                variants={fadeUp}
+                whileHover={{ y: -6 }}
+                className="neo-panel neo-hover p-6 rounded-2xl space-y-3"
+              >
+                <div className="w-12 h-12 rounded-xl bg-surface-raised dark:bg-sunset-50 border border-surface-border dark:border-sunset-200 flex items-center justify-center neo-btn">
+                  <Icon className={`w-6 h-6 ${item.color}`} />
+                </div>
+                <h3 className="text-base font-bold text-warm-text dark:text-surface-darker">{item.title}</h3>
+                <p className="text-xs text-warm-muted dark:text-warm-muted-light leading-relaxed">{item.desc}</p>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      </section>
     </div>
   );
 }

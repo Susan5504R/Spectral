@@ -87,7 +87,8 @@ const Problem = sequelize.define("Problem", {
     constraints: { type: DataTypes.TEXT },
     difficulty: { type: DataTypes.ENUM('Easy', 'Medium', 'Hard') },
     editorialDescription: { type: DataTypes.TEXT },
-    editorialSolutions: { type: DataTypes.JSONB } // Stores { python: "...", cpp: "...", etc. }
+    editorialSolutions: { type: DataTypes.JSONB }, // Stores { python: "...", cpp: "...", etc. }
+    hints: { type: DataTypes.JSONB } // Stores ["Hint 1", "Hint 2", "Hint 3"]
 });
 
 const TestCase = sequelize.define("TestCase", {

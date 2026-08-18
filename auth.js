@@ -13,6 +13,26 @@ const authenticateToken = (req, res, next) => {
         next();
     });
 };
+
+const optionalAuth = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        req.user = null;
+        return next();
+    }
+
+    jwt.verify(token, SECRET, (err, user) => {
+        if (err) {
+            req.user = null;
+        } else {
+            req.user = user;
+        }
+        next();
+    });
+};
+
 const requireAdmin = (req, res, next) => {
     if (!req.user || !req.user.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
@@ -21,4 +41,4 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
-module.exports = { authenticateToken, requireAdmin, SECRET };
+module.exports = { authenticateToken, optionalAuth, requireAdmin, SECRET };

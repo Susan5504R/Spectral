@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Navbar from "../components/Navbar";
 import { ArrowLeft, Plus, Trash2, Save } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -9,7 +10,7 @@ const EMPTY_CASE = { input: "", expectedOutput: "", isHidden: true };
 function Field({ label, children }) {
   return (
     <div>
-      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+      <label className="block text-xs font-bold uppercase tracking-wider text-warm-muted mb-1.5">
         {label}
       </label>
       {children}
@@ -18,7 +19,7 @@ function Field({ label, children }) {
 }
 
 const inputCls =
-  "w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all";
+  "w-full bg-surface-darker dark:bg-sunset-50 border border-surface-border dark:border-sunset-200 rounded-xl px-4 py-2.5 text-sm text-warm-text dark:text-surface-darker focus:border-sunset-500 focus:ring-1 focus:ring-sunset-500 outline-none transition-all";
 
 export default function AdminProblem() {
   const navigate = useNavigate();
@@ -98,11 +99,13 @@ export default function AdminProblem() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-surface-darker dark:bg-sunset-50 text-warm-text dark:text-surface-darker flex flex-col">
+      <Navbar />
+
+      <main className="max-w-3xl mx-auto px-6 py-8 w-full flex-1">
         <button
           onClick={() => navigate(-1)}
-          className="mb-6 flex items-center gap-2 text-slate-400 hover:text-white transition"
+          className="mb-6 flex items-center gap-2 text-warm-muted hover:text-warm-text transition neo-btn px-3 py-1.5 rounded-lg bg-surface-raised border border-surface-border"
         >
           <ArrowLeft size={18} /> Back
         </button>
@@ -123,48 +126,24 @@ export default function AdminProblem() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Core details */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-5">
-            <h2 className="font-semibold text-slate-300">Problem Details</h2>
+          <div className="neo-panel p-6 space-y-5">
+            <h2 className="font-semibold text-warm-text">Problem Details</h2>
 
             <Field label="Title">
-              <input
-                type="text"
-                value={form.title}
-                onChange={set("title")}
-                required
-                className={inputCls}
-                placeholder="Two Sum"
-              />
+              <input type="text" value={form.title} onChange={set("title")} required className={inputCls} placeholder="Two Sum" />
             </Field>
 
             <Field label="Description">
-              <textarea
-                rows={5}
-                value={form.description}
-                onChange={set("description")}
-                required
-                className={`${inputCls} resize-none`}
-                placeholder="Given an array of integers nums and an integer target..."
-              />
+              <textarea rows={5} value={form.description} onChange={set("description")} required className={`${inputCls} resize-none`} placeholder="Given an array of integers nums and an integer target..." />
             </Field>
 
             <Field label="Constraints">
-              <textarea
-                rows={3}
-                value={form.constraints}
-                onChange={set("constraints")}
-                className={`${inputCls} resize-none`}
-                placeholder="2 ≤ nums.length ≤ 10⁴&#10;-10⁹ ≤ nums[i] ≤ 10⁹"
-              />
+              <textarea rows={3} value={form.constraints} onChange={set("constraints")} className={`${inputCls} resize-none`} placeholder={"2 ≤ nums.length ≤ 10⁴\n-10⁹ ≤ nums[i] ≤ 10⁹"} />
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Difficulty">
-                <select
-                  value={form.difficulty}
-                  onChange={set("difficulty")}
-                  className={inputCls}
-                >
+                <select value={form.difficulty} onChange={set("difficulty")} className={inputCls}>
                   <option>Easy</option>
                   <option>Medium</option>
                   <option>Hard</option>
@@ -172,55 +151,31 @@ export default function AdminProblem() {
               </Field>
 
               <Field label="Topics (comma-separated)">
-                <input
-                  type="text"
-                  value={form.topics}
-                  onChange={set("topics")}
-                  className={inputCls}
-                  placeholder="Arrays, Hash Table"
-                />
+                <input type="text" value={form.topics} onChange={set("topics")} className={inputCls} placeholder="Arrays, Hash Table" />
               </Field>
             </div>
           </div>
 
           {/* Test cases */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <div className="neo-panel p-6 space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="font-semibold text-slate-300">Test Cases</h2>
-              <button
-                type="button"
-                onClick={addCase}
-                className="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition"
-              >
+              <h2 className="font-semibold text-warm-text">Test Cases</h2>
+              <button type="button" onClick={addCase} className="flex items-center gap-1.5 text-xs bg-warm-gold/10 text-warm-gold hover:bg-warm-gold/20 px-3 py-1.5 rounded-lg border border-warm-gold/30 transition font-bold">
                 <Plus size={13} /> Add Case
               </button>
             </div>
 
             {testCases.map((tc, i) => (
-              <div
-                key={i}
-                className="border border-slate-700 rounded-xl p-4 space-y-3 relative"
-              >
+              <div key={i} className="border border-surface-border dark:border-sunset-200 rounded-xl p-4 space-y-3 relative">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-500 uppercase">
-                    Case {i + 1}
-                  </span>
+                  <span className="text-xs font-bold text-warm-muted uppercase">Case {i + 1}</span>
                   <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={tc.isHidden}
-                        onChange={(e) => updateCase(i, "isHidden", e.target.checked)}
-                        className="accent-blue-500"
-                      />
+                    <label className="flex items-center gap-1.5 text-xs text-warm-muted cursor-pointer">
+                      <input type="checkbox" checked={tc.isHidden} onChange={(e) => updateCase(i, "isHidden", e.target.checked)} className="accent-sunset-500" />
                       Hidden
                     </label>
                     {testCases.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeCase(i)}
-                        className="text-rose-500 hover:text-rose-400 transition"
-                      >
+                      <button type="button" onClick={() => removeCase(i)} className="text-rose-500 hover:text-rose-400 transition">
                         <Trash2 size={14} />
                       </button>
                     )}
@@ -229,24 +184,10 @@ export default function AdminProblem() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Input">
-                    <textarea
-                      rows={3}
-                      value={tc.input}
-                      onChange={(e) => updateCase(i, "input", e.target.value)}
-                      required
-                      className={`${inputCls} resize-none font-mono text-xs`}
-                      placeholder="[2,7,11,15]&#10;9"
-                    />
+                    <textarea rows={3} value={tc.input} onChange={(e) => updateCase(i, "input", e.target.value)} required className={`${inputCls} resize-none font-mono text-xs`} placeholder={"[2,7,11,15]\n9"} />
                   </Field>
                   <Field label="Expected Output">
-                    <textarea
-                      rows={3}
-                      value={tc.expectedOutput}
-                      onChange={(e) => updateCase(i, "expectedOutput", e.target.value)}
-                      required
-                      className={`${inputCls} resize-none font-mono text-xs`}
-                      placeholder="[0,1]"
-                    />
+                    <textarea rows={3} value={tc.expectedOutput} onChange={(e) => updateCase(i, "expectedOutput", e.target.value)} required className={`${inputCls} resize-none font-mono text-xs`} placeholder="[0,1]" />
                   </Field>
                 </div>
               </div>
@@ -254,17 +195,11 @@ export default function AdminProblem() {
           </div>
 
           {/* Editorial */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-5">
-            <h2 className="font-semibold text-slate-300">Editorial (optional)</h2>
+          <div className="neo-panel p-6 space-y-5">
+            <h2 className="font-semibold text-warm-text">Editorial (optional)</h2>
 
             <Field label="Approach">
-              <textarea
-                rows={4}
-                value={form.editorialDescription}
-                onChange={set("editorialDescription")}
-                className={`${inputCls} resize-none`}
-                placeholder="Use a hash map to store each number and its index..."
-              />
+              <textarea rows={4} value={form.editorialDescription} onChange={set("editorialDescription")} className={`${inputCls} resize-none`} placeholder="Use a hash map to store each number and its index..." />
             </Field>
 
             {[
@@ -273,12 +208,7 @@ export default function AdminProblem() {
               { key: "editorialJava", label: "Java Solution" }
             ].map(({ key, label }) => (
               <Field key={key} label={label}>
-                <textarea
-                  rows={5}
-                  value={form[key]}
-                  onChange={set(key)}
-                  className={`${inputCls} resize-none font-mono text-xs`}
-                />
+                <textarea rows={5} value={form[key]} onChange={set(key)} className={`${inputCls} resize-none font-mono text-xs`} />
               </Field>
             ))}
           </div>
@@ -286,13 +216,13 @@ export default function AdminProblem() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold transition disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sunset-500 to-sunset-400 hover:from-sunset-400 hover:to-sunset-300 py-3 rounded-xl font-bold text-white shadow-lg shadow-sunset-500/20 transition-all disabled:opacity-50 hover:scale-[1.02]"
           >
             <Save size={18} />
             {submitting ? "Creating..." : "Create Problem"}
           </button>
         </form>
-      </div>
+      </main>
     </div>
   );
 }

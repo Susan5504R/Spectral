@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import Navbar from "../components/Navbar";
 import { ArrowLeft, ShieldAlert, ShieldCheck, Shield, AlertTriangle } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -28,10 +29,10 @@ function ScoreBar({ label, value }) {
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
-        <span className="text-slate-400">{label}</span>
-        <span className="font-mono text-white">{pct}%</span>
+        <span className="text-warm-muted">{label}</span>
+        <span className="font-mono text-warm-text">{pct}%</span>
       </div>
-      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+      <div className="w-full bg-surface-raised rounded-full h-1.5 overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -60,14 +61,15 @@ export default function PlagiarismReport() {
 
   if (loading)
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-surface-darker text-warm-text flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-sunset-400 border-t-transparent rounded-full animate-spin mr-2" />
         Loading report...
       </div>
     );
 
   if (error)
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-surface-darker text-warm-text flex items-center justify-center">
         <div className="text-rose-400 text-center">
           <ShieldAlert size={40} className="mx-auto mb-3" />
           <p>{error}</p>
@@ -85,39 +87,40 @@ export default function PlagiarismReport() {
     : "clean";
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-surface-darker dark:bg-sunset-50 text-warm-text dark:text-surface-darker flex flex-col">
+      <Navbar />
+      <main className="max-w-3xl mx-auto px-6 py-8 w-full flex-1">
         <button
           onClick={() => navigate(-1)}
-          className="mb-6 flex items-center gap-2 text-slate-400 hover:text-white transition"
+          className="mb-6 flex items-center gap-2 text-warm-muted hover:text-warm-text transition neo-btn px-3 py-1.5 rounded-lg bg-surface-raised border border-surface-border"
         >
           <ArrowLeft size={18} /> Back
         </button>
 
         <div className="flex items-center gap-3 mb-2">
-          <ShieldAlert className="text-blue-400" size={26} />
+          <ShieldAlert className="text-sunset-400" size={26} />
           <h1 className="text-2xl font-bold">Plagiarism Report</h1>
         </div>
-        <p className="text-slate-500 text-xs font-mono mb-8">
+        <p className="text-warm-muted/60 text-xs font-mono mb-8">
           Submission: {submissionId}
         </p>
 
         {/* Summary */}
         <div className={`flex items-center justify-between p-5 rounded-2xl border mb-8 ${VERDICT_META[overallVerdict].bg}`}>
           <div>
-            <p className="text-xs uppercase font-bold tracking-wider text-slate-400 mb-1">
+            <p className="text-xs uppercase font-bold tracking-wider text-warm-muted mb-1">
               Overall Verdict
             </p>
             <VerdictBadge verdict={overallVerdict} />
           </div>
           <div className="text-right">
-            <p className="text-xs text-slate-400 mb-1">Comparisons</p>
+            <p className="text-xs text-warm-muted mb-1">Comparisons</p>
             <p className="text-2xl font-bold">{checks.length}</p>
           </div>
         </div>
 
         {checks.length === 0 ? (
-          <div className="text-center py-16 border-2 border-dashed border-slate-800 rounded-2xl text-slate-500">
+          <div className="text-center py-16 border-2 border-dashed border-surface-border rounded-2xl text-warm-muted/60">
             <ShieldCheck size={40} className="mx-auto mb-3 text-emerald-600" />
             No similarity matches found. This submission looks original.
           </div>
@@ -126,35 +129,35 @@ export default function PlagiarismReport() {
             {checks.map((c, i) => (
               <div
                 key={i}
-                className="bg-slate-900/50 border border-slate-800 rounded-2xl p-5 space-y-4"
+                className="neo-panel p-5 space-y-4"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Compared against</p>
-                    <p className="font-mono text-sm text-slate-300">{c.against}</p>
-                  </div>
-                  <VerdictBadge verdict={c.verdict} />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-warm-muted/60 mb-1">Compared against</p>
+                  <p className="font-mono text-sm text-warm-text">{c.against}</p>
                 </div>
+                <VerdictBadge verdict={c.verdict} />
+              </div>
 
-                <div className="space-y-2">
-                  <ScoreBar label="Cosine Similarity" value={c.cosineScore} />
-                  <ScoreBar label="Jaccard Similarity" value={c.jaccardScore} />
-                  {c.aiScore != null && (
-                    <ScoreBar label="AI Score" value={c.aiScore} />
-                  )}
-                </div>
-
-                {c.explanation && (
-                  <div className="bg-slate-800/50 rounded-xl p-3">
-                    <p className="text-xs text-slate-500 uppercase font-bold mb-1">AI Explanation</p>
-                    <p className="text-sm text-slate-300 leading-relaxed">{c.explanation}</p>
-                  </div>
+              <div className="space-y-2">
+                <ScoreBar label="Cosine Similarity" value={c.cosineScore} />
+                <ScoreBar label="Jaccard Similarity" value={c.jaccardScore} />
+                {c.aiScore != null && (
+                  <ScoreBar label="AI Score" value={c.aiScore} />
                 )}
               </div>
+
+              {c.explanation && (
+                <div className="bg-surface-raised dark:bg-sunset-50 rounded-xl p-3">
+                  <p className="text-xs text-warm-muted/60 uppercase font-bold mb-1">AI Explanation</p>
+                  <p className="text-sm text-warm-text leading-relaxed">{c.explanation}</p>
+                </div>
+              )}
+            </div>
             ))}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
